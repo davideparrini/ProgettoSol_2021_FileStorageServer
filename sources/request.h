@@ -17,7 +17,7 @@ typedef enum e{
 }req_type;
 
 typedef struct f{
-    int socketname;
+    int socket_fd;
     file_t file;
     char request_task[100];
     req_type type;

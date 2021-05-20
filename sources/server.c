@@ -56,23 +56,22 @@ void cleanup() {
 
 void handle_task(int *pclient_socket){
     int client_socket = *(int*) pclient_socket;
-
-    char buffer[BUFSIZE];
     char actualpath[PATH_MAX+1];
     request richiesta_server;
 
-    memset(&buffer, 0, sizeof(char)*100);
-    readn(client_socket, &buffer, sizeof(char)*100); 
-    
-    printf("Request : %s\n",buffer);
-    fflush(stdout);
+    memset(&richiesta_server, 0, sizeof(request));
+    readn(client_socket, &richiesta_server, sizeof(request)); 
+
     do_work(&richiesta_server);
-    if(realpath(buffer,actualpath) == NULL){
+   /* if(realpath(richiesta_server,actualpath) == NULL){
         printf("Errore (bad path) : %s\n",buffer);
         close(client_socket);
         return;
     }
-    
+    */
+
+
+   // DA RIGUARDARE
 }
 
 
