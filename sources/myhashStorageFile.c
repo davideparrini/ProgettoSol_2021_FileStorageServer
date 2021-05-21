@@ -1,38 +1,7 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <time.h>
-#include <sys/stat.h>
-#include <string.h>
-
-typedef struct node{
-	char* filename;
-	struct node *next;
-    struct node *prec;
-}file_t;
-
-typedef struct _list{
-	int size;
-	file_t *head;
-	file_t *tail;
-}list;
-typedef struct _hash{
-    int n_file;
-	int len;
-    long max_capacity;
-    int max_size_last_cell;
-	list *cell;
-
-}hashtable;
-
-void init_hash(hashtable *table,size_t a,size_t b, int len);
-int hash(hashtable table,char *namefile);
-void append_list(list *cella,char* file);
-void leggi_hash(hashtable *table, int len);
-void ins_hashtable(hashtable *table, char* namefile);
-
+#include "myhashstoragefile.h"
 
 void init_hash(hashtable *table,size_t a,size_t b, int n_file){
+	//inizializzazione hash
 	table->len = n_file*2+1;
     table->max_size_last_cell = 10;
 	table->cell = malloc(table->len*sizeof(list));
@@ -44,15 +13,17 @@ void init_hash(hashtable *table,size_t a,size_t b, int n_file){
 }
 
 int hash(hashtable table,char *namefile){
+	//funzione hash
 	int len = strlen(namefile);
 	int somma = 0;
 	for (size_t i=0; i < len; i++){
 		somma += namefile[i];
 	}
-	return somma * 93199 % (table.len-1);
+	return somma * NUMERO_PRIMO_ENORME % (table.len-1);
 }
 
 void append_list(list *cell,char *file){
+	//inserimento in coda della lista
 	file_t* new = malloc(sizeof(file_t));
 	new->filename = malloc(sizeof(char)*strlen(file)+1);
 	new->next = NULL;
@@ -68,6 +39,7 @@ void append_list(list *cell,char *file){
 }
 
 void insert_list(list *cell, char *file){
+	//inserimento in testa della lista
     file_t* new = malloc(sizeof(file_t));
 	new->filename = malloc(sizeof(char)*strlen(file)+1);
 	strcpy(new->filename,file);
@@ -78,6 +50,7 @@ void insert_list(list *cell, char *file){
 }
 
 file_t* pop_list(list *cell){
+	//rimouve e ritorna l'ultimo elemento della lista
     if(cell->head == NULL){
             return NULL; 
         }
@@ -91,13 +64,14 @@ file_t* pop_list(list *cell){
         }
 }
 void print_hash(hashtable table){
+	//stampa hash
 	for (int i=0; i< table.len; i++){
 		printf("%d -> ",i);
 		if(table.cell[i].head != NULL){
 			size_t n = table.cell[i].size;
 			list temp = table.cell[i];
 			while(n > 0){
-				printf("%s -> ",temp.head->filename);	
+				printf("PATH FILE: %s -> ",temp.head->filename);	
 				temp.head = temp.head->next;
 				n--;
 			}
@@ -106,6 +80,7 @@ void print_hash(hashtable table){
 	}
 }
 int isContains_hash(hashtable table, char* namefile){
+	// la hash contiene il file? Si, return 1. No, return 0;
 	size_t h,trovato = 0;
 	h = hash(table,namefile);
 	list temp = table.cell[h];
@@ -155,21 +130,37 @@ file_t* extract_file(list* cell,char* namefile){
 			}
 			res->next = NULL;
 			res->prec = NULL;		
-
+			return res;
 		}
 		else{
 			temp->head = temp->head->next;
 		}
 	}
-
+	return NULL;
 }
 
 
 void update_hash(hashtable *table,file_t* file){
+	/*	funzione per aggiornare la posizione dei file
+
+	*/
     file_t* f;
-	if( (f = extract_file(&table->cell[table->len],file)) != NULL){
+	if( (f = extract_file(&table->cell[table->len],file->filename)) != NULL){
+		//se è nell'ultima lista della hash, mette il file in testa alla coda
+
         insert_list(&table->cell[table->len],file);
+		return;
     }
-
-
+	else{
+		//altrimenti, estraggo il file dalla hash "generale", ed inserico il file in cima alla
+		//l'ultima lista della hash ed estaggo il file meno recentemente modificato della lista
+		//nella hash "generale"
+		int h = hash(*table,file->filename);
+		if( (f = extract_file(&table->cell[h],file->filename)) != NULL){
+			insert_list(&table->cell[table->len],file->filename);
+			file_t* file_to_realloc = pop_list(&table->cell[table->len]);
+			h  = hash(*table,file_to_realloc->filename);
+			append_list(&table->cell[h],file_to_realloc->filename);
+		}		
+	}
 }
