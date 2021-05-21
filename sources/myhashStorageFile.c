@@ -1,5 +1,6 @@
 #include "myhashstoragefile.h"
 
+
 void init_hash(hashtable *table,size_t a,size_t b, int n_file){
 	//inizializzazione hash
 	table->len = n_file*2+1;
