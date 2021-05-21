@@ -61,4 +61,9 @@ static inline int writen(long fd, void *buf, size_t size) {
 }
 
 
+
+long bytesToMb(long bytes){
+    return bytes/1048576;
+}
+
 #endif 

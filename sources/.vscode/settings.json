@@ -1,0 +1,13 @@
+{
+    "files.associations": {
+        "random": "c",
+        "*.tcc": "c",
+        "unordered_map": "c",
+        "memory": "c",
+        "fstream": "c",
+        "initializer_list": "c",
+        "numeric": "c",
+        "streambuf": "c",
+        "tuple": "c"
+    }
+}

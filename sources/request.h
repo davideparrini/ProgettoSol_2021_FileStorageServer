@@ -1,7 +1,7 @@
-#ifndef REQUEST_H_
+#ifdef REQUEST_H_
 #define REQUEST_H_
 
-#include "file.h"
+
 
 typedef enum e{
     
@@ -18,7 +18,7 @@ typedef enum e{
 
 typedef struct f{
     int socket_fd;
-    file_t file;
+    char* file_name;
     char request_task[100];
     req_type type;
 }request;
