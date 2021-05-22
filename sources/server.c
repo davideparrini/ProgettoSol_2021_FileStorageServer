@@ -13,9 +13,14 @@
 #include <limits.h>
 #include <signal.h>
 
-#include "myqueue.h"
-#include "utils.h"
-#include "request.h"
+#include <myqueue.h>
+#include <utils.h>
+#include <request.h>
+#include <myhashstoragefile.h>
+
+
+
+
 
 #define BUFSIZE 1024
 
@@ -35,6 +40,9 @@ void do_task(request* req_server);
 int main(){
 
     setUpServer(&configurazione);
+    hashtable storage;
+    
+
     pthread_t thread_main;
     pthread_t thread_workers[configurazione.n_thread_workers];
    

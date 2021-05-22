@@ -1,4 +1,4 @@
-#if !defined(UTILS_H_)
+#ifndef UTILS_H_
 #define UTILS_H_
 
 #include <sys/types.h> 
@@ -8,6 +8,13 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <dirent.h>
+
+
+#if !defined(NAME_MAX)
+#define NAME_MAX 256
+#endif
+
 
 typedef struct sockaddr_un SA;
 
@@ -61,9 +68,9 @@ static inline int writen(long fd, void *buf, size_t size) {
 }
 
 
-
-long bytesToMb(long bytes){
-    return bytes/1048576;
-}
+int isNumber(const char* s, long* n);
+int isdot(const char dir[]);
+char* cwd();
+long bytesToMb(long bytes);
 
 #endif 

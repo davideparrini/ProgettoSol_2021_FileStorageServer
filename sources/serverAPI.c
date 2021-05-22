@@ -22,7 +22,7 @@ int socket_c;
 int openConnection(const char* sockname, int msec, const struct timespec abstime){
     SA sockaddr;
     memset(&sockaddr, 0, sizeof(SA));
-    strncpy(sockaddr.sun_path, sockname ,strlen(configurazione.socket_name)+1);
+    strncpy(sockaddr.sun_path, sockname ,strlen(sockname)+1);
     sockaddr.sun_family = AF_UNIX; 
   
 	if(socket_c = socket(AF_UNIX, SOCK_STREAM, 0) == -1){

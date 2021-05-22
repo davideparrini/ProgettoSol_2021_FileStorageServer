@@ -21,6 +21,7 @@ typedef struct _list{
 	file_t *head;
 	file_t *tail;
 }list;
+
 typedef struct _hash{
     int n_file;
 	int len;
@@ -34,7 +35,7 @@ typedef struct _hash{
 
 
 
-void init_hash(hashtable *table,size_t a,size_t b, int n_file)
+void init_hash(hashtable *table,size_t a,size_t b, int n_file);
 int hash(hashtable table,char *namefile);
 void append_list(list *cell,char *file);
 void insert_list(list *cell, char *file);
@@ -47,7 +48,7 @@ file_t* extract_file(list* cell,char* namefile);
 
 
 void update_hash(hashtable *table,file_t* file);
-
+file_t* extract_file_to_server(hashtable *table,file_t* file);
 
 
 

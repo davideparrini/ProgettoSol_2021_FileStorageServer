@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "request.h": "c",
+        "un.h": "c",
+        "myqueue.h": "c",
+        "utils.h": "c",
+        "limits.h": "c",
+        "unistd.h": "c",
+        "pthread.h": "c",
+        "random": "c",
+        "myhashstoragefile.h": "c"
+    },
+    "C_Cpp.dimInactiveRegions": false
+}
