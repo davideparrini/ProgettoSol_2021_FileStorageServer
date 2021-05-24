@@ -104,9 +104,8 @@ void do_task(request* req_server){
         break;
     }
 
-
-
 }
+
 void* main_thread_function(void* args){
     cleanup();
     atexit(cleanup);

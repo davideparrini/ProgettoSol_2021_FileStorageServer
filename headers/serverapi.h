@@ -15,7 +15,7 @@
 #include <sys/select.h>
 #include <limits.h>
 #include <time.h>
-#include "utils.h"
+#include <utils.h>
 
 
 int openConnection(const char* sockname, int msec, const struct timespec abstime);
