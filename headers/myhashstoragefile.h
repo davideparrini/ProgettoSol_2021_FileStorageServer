@@ -1,4 +1,4 @@
-#ifdef MYHASHSTORAGEFILE_H_
+#ifndef MYHASHSTORAGEFILE_H_
 #define MYHASHSTORAGEFILE_H_
 
 
@@ -12,6 +12,8 @@
 
 typedef struct node{
 	char* filename;
+	long dim_bytes;
+	int modified_flag;
 	struct node *next;
     struct node *prec;
 }file_t;
@@ -23,9 +25,12 @@ typedef struct _list{
 }list;
 
 typedef struct _hash{
-    int n_file;
 	int len;
-    long max_capacity;
+	long memory_used;
+    long memory_capacity;
+	int n_file;
+	int n_file_modified;
+	int max_n_file;
     int max_size_last_cell;
 	list *cell;
 
@@ -34,24 +39,24 @@ typedef struct _hash{
 
 
 
-
-void init_hash(hashtable *table,size_t a,size_t b, int n_file);
+file_t* init_file(char *namefile);
+void init_hash(hashtable *table, config s);
 int hash(hashtable table,char *namefile);
-void append_list(list *cell,char *file);
-void insert_list(list *cell, char *file);
+void ins_tail_list(list *cell,file_t *file);
+void ins_head_list(list *cell, file_t*file);
 file_t* pop_list(list *cell);
-void print_hash(hashtable table);
-int isContains_hash(hashtable table, char* namefile);
-	
-void ins_hashtable(hashtable *table, char* file);
-file_t* extract_file(list* cell,char* namefile);
-
-
-void update_hash(hashtable *table,file_t* file);
+void print_storageServer(hashtable table);
+int isContains_hash(hashtable table, file_t* file);
+void ins_file_cache(hashtable *table,file_t* file);
+void ins_file_hashtable(hashtable *table, file_t* file);
+file_t* extract_file_list(list* cell,file_t* file);
 file_t* extract_file_to_server(hashtable *table,file_t* file);
+void extract_file(list* cell,file_t* file);
+void update_hash(hashtable *table,file_t* file);
 
-
-
+int isEmpty(list cella);
+int isCacheFull(hashtable table);
+void free_file(file_t* file);
 
 
 
