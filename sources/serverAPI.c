@@ -12,8 +12,10 @@
 #include <sys/select.h>
 #include <limits.h>
 #include <time.h>
-#include "utils.h"
 
+#include <utils.h>
+#include <request.h>
+#include <response.h>
 
 extern config configurazione;
 
@@ -71,11 +73,67 @@ int closeConnection(const char* sockname){
 }
 
 int openFile(const char* pathname, int flags){
-    char*s = malloc(sizeof(char)*strlen(pathname)+1);
-    memset(s,0,sizeof(s));
-    strncpy(s,pathname,strlen(pathname));
-    int a;
+    request r;
+    response feedback;
+    int b_n;
+
+    memset(&r, 0, sizeof(request));
+    memset(&feedback, 0, sizeof(response));
+    r.flags = flags;
+    r.type = open_file; 
+    r.socket_fd = socket_c;
+    memset(&r.file_name,0,sizeof(r.file_name));
+    if(realpath(pathname,r.file_name) == NULL){
+        perror("Error bad path openfile\n");
+        return -1;
+    }
+    if(b_n = writen(socket_c,&r,sizeof(r)) == -1){
+        errno = EAGAIN;
+        return -1;
+    }
+    if(b_n = readn(socket_c,&feedback,sizeof(response)) == -1){
+        errno = EAGAIN;
+        return -1;
+
+    }
+
+    switch (feedback){
     
+    case OPEN_FILE_SUCCESS:
+        printf("File aperto con successo\n");
+        return 0;    
+
+    case O_CREATE_SUCCESS:
+        printf("File creato con successo\n");
+        return 0;                
+
+    case LOCK_FILE_SUCCESS:
+        printf("File locked con successo\n");
+        return 0;       
+
+    case O_CREATE_NOT_SPECIFIED_AND_FILE_NEXIST:
+        errno = ENOENT;
+        return -1;
+
+    case CANNOT_CREATE_FILE:
+        errno = EPERM;
+        return -1;  
+        
+    case FILE_ALREADY_OPENED:
+        return 0;
+
+    case FILE_ALREADY_EXIST:
+        errno = EEXIST;
+        return -1;
+
+    case CANNOT_ACCESS_FILE_LOCKED:
+        errno = EPERM;
+        return -1;
+
+    default: break;
+    }
+
+    return -1;
 
 }
 int readFile(const char* pathname, void** buf, size_t* size);

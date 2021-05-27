@@ -36,7 +36,6 @@ void setUpServer(config* Server);
 void* worker_thread_function(void* args);
 void* main_thread_function(void* args);
 void do_task(request* req_server);
-void ins_file_server(hashtable* storage, char* namefile);
 
 
 int main(){
@@ -76,7 +75,7 @@ void* main_thread_function(void* args){
         exit(EXIT_FAILURE);
     }
     memset(&serv_addr, 0, sizeof(SA));
-    strncpy(serv_addr.sun_path, configurazione.socket_name,PATH_MAX);
+    strncpy(serv_addr.sun_path, configurazione.socket_name,NAME_MAX);
     serv_addr.sun_family = AF_UNIX; 
 
     if(bind(server_socket,(struct sockaddr*) &serv_addr, 1) == -1){
@@ -121,19 +120,21 @@ void* worker_thread_function(void* args){
 }
 void handle_task(int *pclient_socket){
     int client_socket = *(int*) pclient_socket;
-    char actualpath[PATH_MAX+1];
+    char actualpath[NAME_MAX+1];
     request richiesta_server;
 
     memset(&richiesta_server, 0, sizeof(request));
     readn(client_socket, &richiesta_server, sizeof(request)); 
 
     do_work(&richiesta_server);
-   /* if(realpath(richiesta_server,actualpath) == NULL){
-        printf("Errore (bad path) : %s\n",buffer);
+
+    //check
+    if(realpath(richiesta_server.file_name,actualpath) == NULL){
+        printf("Errore (bad path) : %s\n",richiesta_server.file_name);
         close(client_socket);
         return;
     }
-    */
+    
 
 
    // DA RIGUARDARE
@@ -164,38 +165,38 @@ void do_task(request* req_server){
 
 
 void setUpServer(config *Server){
-    char buff[PATH_MAX];
+    char buff[NAME_MAX];
     FILE* conf;
     if((conf = fopen("config.txt", "r"))  == NULL){
         perror("Errore apertura file conf");
         exit(EXIT_FAILURE);
     }
     char* s;
-    if((s = fgets(buff,PATH_MAX,conf)) != NULL ){
+    if((s = fgets(buff,NAME_MAX,conf)) != NULL ){
         Server->n_thread_workers = atoi(s);
     }
     else{
         perror("Errore lettura N thread workers");
     }
-    if((s = fgets(buff,PATH_MAX,conf) ) != NULL ){
+    if((s = fgets(buff,NAME_MAX,conf) ) != NULL ){
         Server->max_n_file = atoi(s);
     }
     else{
         perror("Errore lettura max n file");
     }
-    if((s = fgets(buff,PATH_MAX,conf) ) != NULL ){
+    if((s = fgets(buff,NAME_MAX,conf) ) != NULL ){
         Server->memory_capacity = atoi(s);
     }
     else{
         perror("Errore lettura memory capacity");
     }
-    if((s = fgets(buff,PATH_MAX,conf)) != NULL ){
+    if((s = fgets(buff,NAME_MAX,conf)) != NULL ){
         strncpy(Server->socket_name, s, strlen(s));
     }
     else{
         perror("Errore lettura socket path");
     }
-    if((s = fgets(buff,PATH_MAX,conf)) != NULL ){
+    if((s = fgets(buff,NAME_MAX,conf)) != NULL ){
         strncpy(Server->log_file_path, s, strlen(s));
     }
     else{
@@ -206,107 +207,5 @@ void setUpServer(config *Server){
 }
 
 
-void ins_file_server(hashtable* storage, char* namefile){
-    file_t *f = init_file(namefile);
-    if(storage->n_file < storage->max_n_file && (storage->memory_used + f->dim_bytes) <= storage->memory_capacity){
-        ins_file_hashtable(storage,f);
-    }
-    else{
-        if(storage->n_file_modified == 0){
-            printf("Server pieno e non ci sono file \
-                    modificati nel server\nImpossibile inserire file\n");  
-            free_file(f);
-        }
-        else{
-            if(storage->n_file < storage->max_n_file){
-                //quindi non ha memoria
-                //lavoro sulla memoria e di conseguenza anche sui posti
-                if(storage->n_file_modified > storage->max_size_last_cell){
-                    //se il numero dei file modificati è maggiore della capacità della cache,
-                    // allora cerco il primo file modificato da rimuovere
 
-                    //ricerca file da rimpiazzare
-                    int stop = 0;
-                    int h = hash(*storage,namefile);
-                    file_t* to_reject;
-                    list list_reject;
-                    long somma_bytes; //somma bytes della list_reject
-                    while(!stop){
-                        list* temp = storage->cell[h].head;
-                        while(temp->head != NULL){
-                            if(temp->head->modified_flag == 1){
-                                to_reject = temp->head;
-                                somma_bytes += to_reject->dim_bytes;
-                                ins_head_list(&list_reject,to_reject);
-                                storage->n_file_modified--;
-                                storage->n_file--;
-                                if((storage->memory_used - somma_bytes + f->dim_bytes) <= storage->memory_capacity){
-                                    stop=1;
-                                    break;
-                                }  
-                            }
-                            temp->head = temp->head->next;
-                        }
-                        h++;
-                    }
-                    extract_file(storage->cell[h].head, to_reject);
-                    storage->n_file_modified--;
-                    storage->n_file--;
-                    free_file(to_reject);
-                    ins_file_hashtable(storage,f);
-                }
-                else{
-                    file_t* to_reject = pop_list(&storage->cell[storage->len]);
-                    int h = hash(*storage,f->filename);
-                    ins_file_hashtable(&storage->cell[h],f);
-                    storage->n_file--;
-                    storage->n_file_modified--;
-                    free_file(to_reject);
-                }
-            }
-            else{
-                //quindi non ha abbastanza posti 
-                if((storage->memory_used + f->dim_bytes) <= storage->memory_capacity){
-                    //lavoro solo sui posti
-                    if(storage->n_file_modified > storage->max_size_last_cell){
-                        //se il numero dei file modificati è maggiore della capacità della cache,
-                        // allora cerco il primo file modificato da rimuovere
 
-                        //ricerca file da rimpiazzare
-                        int find = 0;
-                        int h = hash(*storage,namefile);
-                        file_t* to_reject;
-                        while(!find){
-                            list* temp = storage->cell[h].head;
-                            while(temp->head != NULL){
-                                if(temp->head->modified_flag == 1){
-                                    to_reject = temp->head;
-                                    find=1;
-                                    break;
-                                }
-                                temp->head = temp->head->next;
-                            }
-                            h++;
-                        }
-                        extract_file(storage->cell[h].head, to_reject);
-                        storage->n_file_modified--;
-                        storage->n_file--;
-                        free_file(to_reject);
-                        ins_file_hashtable(storage,f);
-                    }
-                    else{
-                        file_t* to_reject = pop_list(&storage->cell[storage->len]);
-                        int h = hash(*storage,f->filename);
-                        ins_file_hashtable(&storage->cell[h],f);
-                        storage->n_file--;
-                        storage->n_file_modified--;
-                        free_file(to_reject);                        
-                    }
-                }
-            }
-
-            
-
-        }
-    }
-}

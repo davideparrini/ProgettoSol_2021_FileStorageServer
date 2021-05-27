@@ -22,8 +22,8 @@ typedef struct S{
     int n_thread_workers;
     int max_n_file;
     int memory_capacity;
-    char socket_name[PATH_MAX];
-    char log_file_path[PATH_MAX];
+    char socket_name[NAME_MAX];
+    char log_file_path[NAME_MAX];
 }config;
 
 #define SYSCALL_EXIT(name, r, sc, str, ...)	\

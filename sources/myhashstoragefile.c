@@ -14,6 +14,7 @@ file_t* init_file(char *namefile){
 	new->filename = malloc(sizeof(char)*strlen(namefile)+1);
 	strncpy(new->filename,namefile,strlen(namefile));
 	new->modified_flag = 0;
+	new->inCache_flag = 0;
 	new->next = NULL;
 	new->prec = NULL;
 	struct stat s;
@@ -22,6 +23,7 @@ file_t* init_file(char *namefile){
         exit(EXIT_FAILURE);
     }
 	new->dim_bytes = s.st_size;
+	new->creation_time = s.st_atim;	
 }
 
 void init_hash(hashtable *table, config s){
@@ -131,88 +133,196 @@ void extract_file(list* cell,file_t* file){
 	file->next = NULL;
 	file->prec = NULL;		
 	cell->size--;
-	return file;
 }
 
 
-file_t* extract_file_list(list* cell,file_t* file){
-	//cerca il file e lo estrare dalla cella della hash ridandolo come risultato
-	list* temp = cell;
-	file_t* res;
-	while(temp->head != NULL){
-		if (!strcmp(temp->head->filename,file->filename) ){
-			res = temp->head;
-			
-			if(temp->head->next != NULL){
-				if(temp->head->prec != NULL) {
-					temp->head->prec->next = temp->head->next;
-					temp->head->next->prec = temp->head->prec;
-				}
-				else {	
-					cell->head = temp->head->next;
-					cell->tail = cell->head;
-					temp->head->prec = NULL;
-				}	
-				
-			}
-			else{
-				cell->head = NULL;
-				cell->tail = NULL;			
-			}
-			res->next = NULL;
-			res->prec = NULL;		
-			return res;
-		}
-		else{
-			temp->head = temp->head->next;
-		}
-	}
-	return NULL;
-}
-
-file_t* extract_file_to_server(hashtable *table,file_t* file){
-	file_t* f;
-	if( (f = extract_file_list(&table->cell[table->len],file)) != NULL){
-		//se è nell'ultima lista della hash, mette il file in testa alla coda
-		table->memory_used -= f->dim_bytes;
-		table->n_file_modified--;
-		table->n_file--;
-		return f;
+void extract_file_to_server(hashtable *table,file_t* file){
+	
+	if(file->inCache_flag){
+		extract_file(&table->cell[table->len],file);
     }
-	else{
-		//altrimenti, estraggo il file dalla hash "generale", ed inserico il file in cima alla
-		//l'ultima lista della hash ed estaggo il file meno recentemente modificato della lista
-		//nella hash "generale"
+	else{	
 		int h = hash(*table,file->filename);
-		if( (f = extract_file_list(&table->cell[h],file->filename)) != NULL){
-			table->memory_used -= f->dim_bytes;
-			return f;
-		}		
+		extract_file(&table->cell[h],file);
 	}
-	return NULL;
+	table->memory_used -= file->dim_bytes;
+	if(file->modified_flag){
+		table->n_file_modified--;
+		file->modified_flag = 0;
+	}
+	table->n_file--;
+	file->inCache_flag = 0;
+	
+
 }
 
-void update_hash(hashtable *table,file_t* file){
+void update_file(hashtable *table,file_t* file){
 	/*	funzione per aggiornare la posizione dei file
 	*/
-    file_t* f;
-	//se è nell'ultima lista della hash, mette il file in testa alla coda
-	if((f = extract_file_list(&table->cell[table->len],file)) !=  NULL){
+    if(file->inCache_flag){
+		extract_file(&table->cell[table->len],file);
 		ins_head_list(&table->cell[table->len],file);
-		return;
 	}
 	else{
-		//altrimenti, estraggo il file dalla hash "generale", ed inserico il file in cima alla
-		//l'ultima lista della hash ed estaggo il file meno recentemente modificato della lista
-		//nella hash "generale"
-		int h = hash(*table,file->filename);
-		if( (f = extract_file_list(&table->cell[h],file)) != NULL){
-			ins_head_list(&table->cell[table->len],file);
-			file_t* file_to_realloc = pop_list(&table->cell[table->len]);
-			h  = hash(*table,file_to_realloc->filename);
-			ins_tail_list(&table->cell[h],file_to_realloc);
-		}		
+		int h;
+		if(isCacheFull){
+			file_t *f = pop_list(&table->cell[table->len]);
+			f->inCache_flag = 0;
+			h = hash(*table,f->filename);
+			ins_tail_list(&table->cell[h],file);
+		}
+		h = hash(*table,file->filename);
+		extract_file(&table->cell[h],file);
+		ins_head_list(&table->cell[table->len],file);
+		file->modified_flag = 1;
+		file->inCache_flag = 1;		
 	}
+}
+
+file_t* research_file(hashtable table,char *namefile){
+	int h = hash(table,namefile);
+	file_t* f;
+	if(f = research_file_list(table.cell[h],namefile) != NULL){
+		return f;
+	}
+	else{
+		if(f = research_file_list(table.cell[table.len],namefile) != NULL){
+			return f;
+		}
+	}
+	return NULL;
+}
+
+file_t* research_file_list(list cell,char* namefile){
+	file_t* f;
+	list temp = cell;
+	while(temp.head != NULL){
+		if(!strncmp(temp.head->filename,namefile,strlen(namefile))){
+			f = &temp.head;
+			return f;
+		}
+		else temp.head = temp.head->next;
+	}
+	return NULL;
+}
+
+
+
+
+
+
+void ins_file_server(hashtable* table, char* namefile){
+    file_t *f = init_file(namefile);
+    if(table->n_file < table->max_n_file && (table->memory_used + f->dim_bytes) <= table->memory_capacity){
+        ins_file_hashtable(table,f);
+    }
+    else{
+        if(table->n_file_modified == 0){
+            printf("Server pieno e non ci sono file \
+                    modificati nel server\nImpossibile inserire file\n");  
+            free_file(f);
+        }
+        else{
+            if(table->n_file < table->max_n_file){
+                //quindi non ha memoria
+                //lavoro sulla memoria e di conseguenza anche sui posti
+                if(table->n_file_modified > table->max_size_last_cell){
+                    //se il numero dei file modificati è maggiore della capacità della cache,
+                    // allora cerco il primo file modificato da rimuovere
+
+                    //ricerca file da rimpiazzare
+                    int stop = 0;
+                    int h = hash(*table,namefile);
+                    file_t* to_reject;
+                    list list_reject;
+                    long somma_bytes; //somma bytes della list_reject
+                    while(!stop){
+                        list* temp = table->cell[h].head;
+                        while(temp->head != NULL){
+                            if(temp->head->modified_flag == 1){
+                                to_reject = temp->head;
+                                somma_bytes += to_reject->dim_bytes;
+                                ins_head_list(&list_reject,to_reject);
+                                table->n_file_modified--;
+                                table->n_file--;
+                                if((table->memory_used - somma_bytes + f->dim_bytes) <= table->memory_capacity){
+                                    stop=1;
+                                    break;
+                                }  
+                            }
+                            temp->head = temp->head->next;
+                        }
+                        h++;
+                    }
+                    extract_file(table->cell[h].head, to_reject);
+                    table->n_file_modified--;
+                    table->n_file--;
+                    free_file(to_reject);
+                    ins_file_hashtable(table,f);
+                }
+                else{
+                    file_t* to_reject = pop_list(&table->cell[table->len]);
+                    int h = hash(*table,f->filename);
+                    ins_file_hashtable(&table->cell[h],f);
+                    table->n_file--;
+                    table->n_file_modified--;
+                    free_file(to_reject);
+                }
+            }
+            else{
+                //quindi non ha abbastanza posti 
+                if((table->memory_used + f->dim_bytes) <= table->memory_capacity){
+                    //lavoro solo sui posti
+                    if(table->n_file_modified > table->max_size_last_cell){
+                        //se il numero dei file modificati è maggiore della capacità della cache,
+                        // allora cerco il primo file modificato da rimuovere
+
+                        //ricerca file da rimpiazzare
+                        int find = 0;
+                        int h = hash(*table,namefile);
+                        file_t* to_reject;
+                        while(!find){
+                            list* temp = table->cell[h].head;
+                            while(temp->head != NULL){
+                                if(temp->head->modified_flag == 1){
+                                    to_reject = temp->head;
+                                    find=1;
+                                    break;
+                                }
+                                temp->head = temp->head->next;
+                            }
+                            h++;
+                        }
+                        extract_file(table->cell[h].head, to_reject);
+                        table->n_file_modified--;
+                        table->n_file--;
+                        free_file(to_reject);
+                        ins_file_hashtable(table,f);
+                    }
+                    else{
+                        file_t* to_reject = pop_list(&table->cell[table->len]);
+                        int h = hash(*table,f->filename);
+                        ins_file_hashtable(&table->cell[h],f);
+                        table->n_file--;
+                        table->n_file_modified--;
+                        free_file(to_reject);                        
+                    }
+                }
+            }
+
+            
+
+        }
+    }
+}
+
+void remove_file_server(hashtable* table, char* namefile){
+    file_t* f = research_file(*table,namefile);
+    if(f != NULL){
+        extract_file_to_server(table,f);
+		free_file(f);
+    }
+	return NULL;
 }
 
 int isEmpty(list cella){
@@ -227,7 +337,7 @@ int isContains_list(list cell, file_t* file){
 	list temp = cell;
 	while (temp.head != NULL){
 		if (!strcmp(file->filename,temp.head->filename)) {
-			 return 1;
+			return 1;
 		}
 		else temp.head = temp.head->next;
 	}
