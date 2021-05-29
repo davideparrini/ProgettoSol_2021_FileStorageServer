@@ -133,7 +133,7 @@ int openFile(const char* pathname, int flags){
 
     default: break;
     }
-    errno = 0;
+    errno = 0; 
     return 0;
 
 }
@@ -203,13 +203,14 @@ int readNFiles(int N, const char* dirname){
     response feedback;
     memset(&r,0,sizeof(request));
     memset(&r.file_name,0,sizeof(r.file_name));
+    memset(&r.dirname,0,sizeof(r.dirname));
     memset(&feedback, 0, sizeof(response));
     memset(&feedback.content,0,sizeof(feedback.content));
 
+    MY_REALPATH(r.dirname,dirname,r.dirname);
     r.type = read_N_file; 
     r.socket_fd = socket_c;
     r.c = N;
-
 
     if(b = writen(socket_c,&r,sizeof(r)) == -1){
         errno = EAGAIN;
@@ -221,8 +222,6 @@ int readNFiles(int N, const char* dirname){
         return -1;
     }
     
-    
-
     while(1){
         file_t* temp;
         temp->abs_path = malloc(sizeof(NAME_MAX));
@@ -238,10 +237,47 @@ int readNFiles(int N, const char* dirname){
   
 }
 int writeFile(const char* pathname, const char* dirname){
-    
+    int b;
+    request r;
+    response feedback;
+    memset(&r,0,sizeof(request));
+    memset(&r.file_name,0,sizeof(r.file_name));
+    memset(&r.dirname,0,sizeof(r.dirname));
+    memset(&feedback, 0, sizeof(response));
+    memset(&feedback.content,0,sizeof(feedback.content));
 
-    
+    r.type = write_file;
+    r.socket_fd = socket_c;
+    MY_REALPATH(r.file_name,pathname,r.file_name);
+    MY_REALPATH(r.dirname,dirname,r.dirname);
+
+    if(b = writen(socket_c,&r,sizeof(r)) == -1){
+        errno = EAGAIN;
+        return -1;
+    }
+
+    if(b = readn(socket_c,&feedback,sizeof(response)) == -1){
+        errno = EAGAIN;
+        return -1;
+    }
+    //se il flag della risposta del server è settato a 1, significa
+    //che è stata passata in precedenza openFile(pathname, O_CREATE| O_LOCK)
+    if(feedback.flags != 1 && feedback.type == WRITE_FILE_FAILURE){
+        errno = EPERM;
+        return -1;
+    }
+    else{
+        if(feedback.type == WRITE_FILE_SUCCESS){
+            errno = 0;
+            return 0;
+        }
+        else{
+            errno = EAGAIN;
+            return -1;
+        }    
+    }    
 }
+
 int appendToFile(const char* pathname, void* buf, size_t size, const char* dirname);
 int lockFile(const char* pathname);
 int unlockFile(const char* pathname);

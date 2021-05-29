@@ -182,56 +182,6 @@ int do_task(request* req_server,int* client_s){
 }
 
 
-void setUpServer(config *Server){
-    char buff[NAME_MAX];
-    FILE* conf;
-    memset(buff,0,MAX_LENGHT_FILE);
-    char* s;
-    if((conf = fopen("config.txt", "r"))  == NULL){
-        perror("Errore apertura file conf");
-        exit(EXIT_FAILURE);
-    }
-    
-    if((s = fgets(buff,NAME_MAX,conf)) != NULL ){
-        Server->n_thread_workers = atoi(s);
-        exit(EXIT_FAILURE);
-    }
-    else{
-        perror("Errore lettura N thread workers");
-        exit(EXIT_FAILURE);
-    }
-    if((s = fgets(buff,NAME_MAX,conf) ) != NULL ){
-        Server->max_n_file = atoi(s);
-    }
-    else{
-        perror("Errore lettura max n file");
-        exit(EXIT_FAILURE);
-    }
-    if((s = fgets(buff,NAME_MAX,conf) ) != NULL ){
-        Server->memory_capacity = atoi(s);
-    }
-    else{
-        perror("Errore lettura memory capacity");
-        exit(EXIT_FAILURE);
-    }
-    if((s = fgets(buff,NAME_MAX,conf)) != NULL ){
-        strncpy(Server->socket_name, s, strlen(s));
-    }
-    else{
-        perror("Errore lettura socket path");
-        exit(EXIT_FAILURE);
-    }
-    if((s = fgets(buff,NAME_MAX,conf)) != NULL ){
-        strncpy(Server->log_file_path, s, strlen(s));
-    }
-    else{
-        perror("Errore lettura log file path");
-        exit(EXIT_FAILURE);
-    }
-
-    fclose(conf);
-    free(conf);
-}
 
 int task_openFile(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
@@ -345,3 +295,54 @@ void append_FileLog(char* buff){
     //In caso di successo ritorna 1 else 0
 }
 
+
+void setUpServer(config *Server){
+    char buff[NAME_MAX];
+    FILE* conf;
+    memset(buff,0,MAX_LENGHT_FILE);
+    char* s;
+    if((conf = fopen("config.txt", "r"))  == NULL){
+        perror("Errore apertura file conf");
+        exit(EXIT_FAILURE);
+    }
+    
+    if((s = fgets(buff,NAME_MAX,conf)) != NULL ){
+        Server->n_thread_workers = atoi(s);
+        exit(EXIT_FAILURE);
+    }
+    else{
+        perror("Errore lettura N thread workers");
+        exit(EXIT_FAILURE);
+    }
+    if((s = fgets(buff,NAME_MAX,conf) ) != NULL ){
+        Server->max_n_file = atoi(s);
+    }
+    else{
+        perror("Errore lettura max n file");
+        exit(EXIT_FAILURE);
+    }
+    if((s = fgets(buff,NAME_MAX,conf) ) != NULL ){
+        Server->memory_capacity = atoi(s);
+    }
+    else{
+        perror("Errore lettura memory capacity");
+        exit(EXIT_FAILURE);
+    }
+    if((s = fgets(buff,NAME_MAX,conf)) != NULL ){
+        strncpy(Server->socket_name, s, strlen(s));
+    }
+    else{
+        perror("Errore lettura socket path");
+        exit(EXIT_FAILURE);
+    }
+    if((s = fgets(buff,NAME_MAX,conf)) != NULL ){
+        strncpy(Server->log_file_path, s, strlen(s));
+    }
+    else{
+        perror("Errore lettura log file path");
+        exit(EXIT_FAILURE);
+    }
+
+    fclose(conf);
+    free(conf);
+}

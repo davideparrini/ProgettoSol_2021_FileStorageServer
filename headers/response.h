@@ -12,11 +12,12 @@ typedef enum{
 
     OPEN_FILE_SUCCESS,
     READ_FILE_SUCCESS,
+    WRITE_FILE_SUCCESS,
     O_CREATE_SUCCESS,
     LOCK_FILE_SUCCESS,
 
     NO_SPACE_IN_SERVER,
-
+    WRITE_FILE_FAILURE,
     FILE_NOT_OPENED
 
 }response_type;
@@ -24,6 +25,7 @@ typedef enum{
 typedef struct s{
     response_type type;
     int size;
+    int flags;
     int c; //contatore generico
     char content[MAX_LENGHT_FILE];
 }response;
