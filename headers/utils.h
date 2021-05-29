@@ -12,8 +12,17 @@
 
 
 #if !defined(NAME_MAX)
-#define NAME_MAX 256
+#define NAME_MAX 1000
 #endif
+
+#if !defined(O_CREATE)
+#define O_CREATE 0
+#endif
+
+#if !defined(O_LOCK)
+#define O_LOCK 1
+#endif
+
 
 
 typedef struct sockaddr_un SA;
@@ -33,6 +42,19 @@ typedef struct S{
 	print_error(str, __VA_ARGS__);		\
 	exit(errno_copy);			\
     }
+
+#define MY_REALPATH(from_where,path,resolved_path)\
+    if(realpath(path,resolved_path) == NULL){ \
+		perror(#from_where);\
+		int errno_copy = errno;	 \
+        exit(errno_copy); \
+	}
+
+#define PRINT_ERRNO(from_where,err) \
+    if(err != 0){ \
+        perror(#from_where); \
+        exit(err); \
+    } \
 
 static inline int readn(long fd, void *buf, size_t size) {
     size_t left = size;

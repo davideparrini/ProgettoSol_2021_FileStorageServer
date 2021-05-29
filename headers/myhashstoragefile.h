@@ -12,9 +12,12 @@
 
 typedef struct node{
 	struct timespec creation_time;
+	char* abs_path;
 	char* filename;
 	long dim_bytes;
 	int modified_flag;
+	int opened_flag;
+	int locked_flag;
 	int inCache_flag;
 	struct node *next;
     struct node *prec;
@@ -33,15 +36,16 @@ typedef struct _hash{
 	int n_file;
 	int n_file_modified;
 	int max_n_file;
-    int max_size_last_cell;
+    int max_size_cache;
 	list *cell;
-
+	list *cache;
 }hashtable;
 
 
 
 //inizializzazioni server
 file_t* init_file(char *namefile);
+void init_list(list* l);
 void init_hash(hashtable *table, config s);
 
 //funzione hash
@@ -56,8 +60,8 @@ file_t* pop_list(list *cell);
 void ins_file_cache(hashtable *table,file_t* file); 
 void ins_file_hashtable(hashtable *table, file_t* file);
 //ins e rimozione file server seguendo politica lru
-void ins_file_server(hashtable* storage, char* namefile);
-void remove_file_server(hashtable* table, char* namefile);
+int ins_file_server(hashtable* storage, char* namefile,list* list_reject);
+file_t* remove_file_server(hashtable* table, char* namefile);
 //estrazione di file
 void extract_file_to_server(hashtable *table,file_t* file);
 void extract_file(list* cell,file_t* file);
@@ -72,6 +76,7 @@ int isContains_hash(hashtable table, file_t* file);
 int isEmpty(list cella);
 int isCacheFull(hashtable table);
 void free_file(file_t* file);
+void free_list(list* l);
 void print_storageServer(hashtable table);
 
 

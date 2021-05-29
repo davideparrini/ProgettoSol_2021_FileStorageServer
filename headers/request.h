@@ -7,6 +7,7 @@ typedef enum e{
     
     open_file,
     read_file,
+    read_N_file,
     write_file,
     append_file,
     lock_file,
@@ -19,9 +20,9 @@ typedef enum e{
 typedef struct f{
     int socket_fd;
     int flags;
+    int c; //contatore generico
     char file_name[NAME_MAX];
-    long request_size;
-    char request_opt;
+    int request_size;
     req_type type;
 }request;
 

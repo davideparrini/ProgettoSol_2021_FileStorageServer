@@ -95,13 +95,14 @@ int main(int argc, char const *argv[]){
 
 int arg_h(const char* s){
     printf("Helper message!\nUsage: %s \n-f filename\n-w dirname[,n=0] \
-    \n-W file1[,file2]\n-D dirname\n-r file1[,file2]\n-R [n=0]\n-d dirname\n \
-    -t time\n-l file1[,file2]\n-u file1[,file2]\n-c file1[,file2]\n-p\n");
+    \n-W file1[,file2]..\n-D dirname\n-r file1[,file2]..\n-R [n=0]\n-d dirname\n \
+    -t time\n-l file1[,file2]..\n-u file1[,file2]..\n-c file1[,file2]..\n-p\n");
     return -1;
 }
 
 
 int arg_f(const char* s,char *sockname){
+    memset(sockname,0,MAX_SOCKET_PATH);
     strncpy(sockname,s,MAX_SOCKET_PATH);
     printf("Ora il socket su cui connettersi è : %s\n",sockname);
     return -1;
