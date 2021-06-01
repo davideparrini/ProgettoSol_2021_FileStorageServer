@@ -12,6 +12,7 @@
 #include <sys/select.h>
 #include <limits.h>
 #include <signal.h>
+#include <libgen.h>
 
 #include <myqueue.h>
 #include <utils.h>
@@ -31,7 +32,7 @@ pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static FILE *log_file;
 config configurazione;
 hashtable storage;
-list file_rejected;
+list files_rejected;
 
 void cleanup();
 void handle_task(int *pclient_socket);
@@ -39,21 +40,22 @@ void setUpServer(config* Server);
 void* worker_thread_function(void* args);
 void* main_thread_function(void* args);
 int do_task(request* req_server,int* client_s);
-int task_openFile(request* r, response* feedback);
+int task_openFile(request* r, response* feedback, int* flag_open_lock,int* flag_lock);
 int task_read_file(request* r, response* feedback);
 int task_read_N_file(request* r, response* feedback);
-int task_write_file(request* r, response* feedback);
+int task_write_file(request* r, response* feedback,int* flag_open_lock);
 int task_append_file(request* r, response* feedback);
 int task_unlock_file(request* r, response* feedback);
 int task_close_file(request* r, response* feedback);
 int task_remove_file(request* r, response* feedback);
 void append_FileLog(char* buff);
+void createFiles_inDir(char* dirname,list* l);
 
 int main(){
 
     setUpServer(&configurazione);
     init_hash(&storage,configurazione);
-    init_list(&file_rejected);
+    init_list(&files_rejected);
 
     pthread_t thread_main;
     pthread_t thread_workers[configurazione.n_thread_workers];
@@ -137,14 +139,8 @@ void handle_task(int *pclient_socket){
     memset(&richiesta_server, 0, sizeof(request));
     readn(client_socket, &richiesta_server, sizeof(request)); 
 
-    //check validity
-    if(realpath(richiesta_server.file_name,actualpath) == NULL){
-        printf("Errore (bad path) : %s\n",richiesta_server.file_name);
-        close(client_socket);
-        return;
-    }
-    
-    if(!do_task(&richiesta_server,client_socket)){
+
+    if(do_task(&richiesta_server,client_socket)){
         close(client_socket);
         return ;
     } 
@@ -154,38 +150,46 @@ void handle_task(int *pclient_socket){
 }
 
 int do_task(request* req_server,int* client_s){
+    //In caso di successo ritorna 1 else 0
+    int flag_open_lock = 0;
+    int flag_lock = 0;
+    int res = 0;
     response feedback;
     memset(feedback.content,0,sizeof(feedback.content));
     switch (req_server->type){
 
     case open_file:
-        if(task_openFile(req_server,&feedback))
+        if(task_openFile(req_server,&feedback,&flag_open_lock,&flag_lock)) res = 1;
         break;
     case read_file:
-        if(task_readFile(req_server,&feedback))
+        if(task_readFile(req_server,&feedback)) res = 1;
         break;
 
     case read_N_file:
-        if(task_readFile(req_server,&feedback))
+        if(task_readFile(req_server,&feedback)) res = 1; 
         break;
     case write_file:
-        if(task_writeFile(req_server,&feedback))
+        if(task_writeFile(req_server,&feedback)) res = 1; 
         break;
     case append_file:
-        if(task_appendFile(req_server,&feedback))
+        if(task_appendFile(req_server,&feedback)) res = 1; 
         break;
     
     default:
         break;
     }
+    while(flag_open_lock || flag_lock){
 
+    }  
+    writen(client_s,&feedback,sizeof(feedback));
+    return res;
 }
 
 
 
-int task_openFile(request* r, response* feedback){
+int task_openFile(request* r, response* feedback, int* flag_open_lock,int* flag_lock){
     //In caso di successo ritorna 1 else 0
-
+    //DA RIGUARDARE O_LOCK
     file_t* f = research_file(storage,r->file_name);
     int res = 0, b;
     switch (r->flags){
@@ -194,8 +198,8 @@ int task_openFile(request* r, response* feedback){
         if(f == NULL){
             f = init_file(r->file_name);
             f->opened_flag = 1;
-            if(!ins_file_server(&storage,f,&file_rejected)){
-                feedback->type = CANNOT_CREATE_FILE;
+            if(!ins_file_server(&storage,f,&files_rejected)){
+                feedback->type = NO_SPACE_IN_SERVER;
             }
             else{
                 feedback->type =  O_CREATE_SUCCESS;
@@ -210,7 +214,7 @@ int task_openFile(request* r, response* feedback){
     
     case O_LOCK :
         
-        break;
+    break;
     
     default: break;
     }
@@ -235,7 +239,6 @@ int task_openFile(request* r, response* feedback){
     if(b = writen(r->socket_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
     }
-    PRINT_ERRNO(task_openFile,errno);
     return  res;
 }
 
@@ -257,28 +260,47 @@ int task_read_file(request* r, response* feedback){
                     perror("Errore apertura file in task_read_file");
                 }
                 while(!feof(to_read)){
-                    if((s = fgets(feedback->content,NAME_MAX,to_read)) != NULL){
+                    if((s = fgets(feedback->content,MAX_LENGHT_FILE,to_read)) != NULL){
                         perror("Errore lettura file in task_read_file");
                     }
-                    printf("%s",feedback->content);
                 }
+                printf("%s",feedback->content);
                 fclose(to_read);
                 free(to_read);
             }
         }
     }
-    PRINT_ERRNO(task_read_file,errno);
+
     return res;
 }
 
 int task_read_N_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
 }
-int task_write_file(request* r, response* feedback){
-    //In caso di successo ritorna 1 else 0
+int task_write_file(request* r, response* feedback,int* flag_open_lock){
+    //In caso di successo ritorna 1 else 
+    int res = 0;
+    if(*flag_open_lock != 1){
+        feedback->type = WRITE_FILE_FAILURE;
+    }
+    else{
+        list removed_files;
+        if(ins_file_server(&storage,r->file_name,&removed_files)){
+            feedback->type = WRITE_FILE_SUCCESS;
+            res = 1;
+            if(r->dirname != NULL){
+                createFiles_inDir(r->dirname,&removed_files);
+            }
+            else concatList(&files_rejected,&removed_files);    
+        }
+        else feedback->type = NO_SPACE_IN_SERVER;    
+    }
+    return res;
 }
 int task_append_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
+    int res = 0;
+    
 }
 int task_unlock_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
@@ -345,4 +367,48 @@ void setUpServer(config *Server){
 
     fclose(conf);
     free(conf);
+}
+
+void createFiles_inDir(char* dirname,list* l){
+  //crea file nella directory dirname, dirname deve essere il path assoluto della directory
+  //i file sono passati dalla list l
+  while(isEmpty(*l)){
+    file_t *temp = l->head;
+    char* s_file = strndup(l->head->abs_path,strlen(l->head->abs_path));
+    char* s_dir = strndup(dirname,strlen(dirname));
+    char* pathfile = basename(s_file);
+    free(s_file);
+    free(s_dir);
+    char* newfile_path = strncat(s_dir,s_file,strlen(s_file));
+    free(pathfile);
+    char* content = malloc(sizeof(char)*MAX_LENGHT_FILE);
+    FILE *new, *to_read;
+
+    if(new = fopen(newfile_path,"a")){
+      perror("Errore apertura in putFiles_dir");
+    }
+
+    if(to_read = fopen(l->head->abs_path,"r")){
+      perror("Errore apertura in putFiles_dir");
+    }
+
+    while(!feof(to_read)){
+      if((fgets(content,MAX_LENGHT_FILE,to_read)) != NULL){
+        perror("Errore lettura file in putFiles_dir");
+      }
+    }
+	
+    fputs(content,new);
+
+    fclose(to_read);
+    fclose(new);
+
+    free(newfile_path);
+    free(content);
+    free(new);
+    free(to_read);
+    l->head = l->head->next;
+    free_file(temp);
+  }
+
 }

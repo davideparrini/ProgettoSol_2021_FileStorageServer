@@ -1,6 +1,16 @@
 #include "utils.h"
 
-int isNumber(const char* s, long* n) {
+
+int isdot(const char dir[]) {
+  int l = strlen(dir);
+  
+  if ( (l>0 && dir[l-1] == '.') ) return 1;
+  return 0;
+}
+
+
+
+int isNumber(const char* s, long* n){
   if (s==NULL) return 1;
   if (strlen(s)==0) return 1;
   char* e = NULL;
@@ -17,3 +27,4 @@ int isNumber(const char* s, long* n) {
 long bytesToMb(long bytes){
     return bytes/1048576;
 }
+

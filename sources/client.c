@@ -35,7 +35,7 @@ int arg_u(const char* s);
 int arg_c(const char* s);
 int arg_p(const char* s);
 
-
+//PRINT_ERRNO va chiamata qua nel client.c
 
 int main(int argc, char const *argv[]){
     char* socket_name = malloc(sizeof(char)*MAX_SOCKET_PATH);

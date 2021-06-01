@@ -1,8 +1,8 @@
 #ifndef MYQUEUE_H_
 #define MYQUEUE_H_
 //queue for request
-typedef struct node{
-    struct node* next;
+typedef struct node__{
+    struct node__* next;
     int *client_socket;
 }node_t;
 

@@ -1,15 +1,27 @@
 #ifndef UTILS_H_
 #define UTILS_H_
 
-#include <sys/types.h> 
-#include <sys/socket.h>
-#include <sys/uio.h>
-#include <sys/un.h>
-#include <errno.h>
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
-#include <dirent.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <time.h>
+#include <sys/socket.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <sys/un.h>
+#include <sys/select.h>
+#include <limits.h>
+#include <signal.h>
+#include <libgen.h>
 
+#include <myqueue.h>
+#include <utils.h>
+#include <request.h>
+#include <response.h>
+#include <myhashstoragefile.h>
 
 #if !defined(NAME_MAX)
 #define NAME_MAX 1000
@@ -50,6 +62,12 @@ typedef struct S{
         exit(errno_copy); \
 	}
 
+#define MY_GETCWD(from_where,buf)\
+    if(getcwd(buf,sizeof(buf)) == NULL){ \
+		perror(#from_where);\
+		int errno_copy = errno;	 \
+        exit(errno_copy); \
+	}
 #define PRINT_ERRNO(from_where,err) \
     if(err != 0){ \
         perror(#from_where); \
@@ -92,7 +110,7 @@ static inline int writen(long fd, void *buf, size_t size) {
 
 int isNumber(const char* s, long* n);
 int isdot(const char dir[]);
-char* cwd();
+
 long bytesToMb(long bytes);
 
 #endif 
