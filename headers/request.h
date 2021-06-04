@@ -24,7 +24,7 @@ typedef struct f{
     char *file_name;
     char *dirname;
     void *buff;
-    int request_size;
+    size_t request_size;
     req_type type;
 }request;
 

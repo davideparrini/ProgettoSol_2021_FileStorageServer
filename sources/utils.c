@@ -28,3 +28,6 @@ long bytesToMb(long bytes){
     return bytes/1048576;
 }
 
+long MbToBytes(long Mb){
+  return Mb*1048576;
+}

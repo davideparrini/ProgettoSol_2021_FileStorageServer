@@ -62,6 +62,7 @@ typedef struct S{
         exit(errno_copy); \
 	}
 
+
 #define MY_GETCWD(from_where,buf)\
     if(getcwd(buf,sizeof(buf)) == NULL){ \
 		perror(#from_where);\
@@ -112,5 +113,5 @@ int isNumber(const char* s, long* n);
 int isdot(const char dir[]);
 
 long bytesToMb(long bytes);
-
+long MbToBytes(long Mb);
 #endif 
