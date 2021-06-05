@@ -22,6 +22,7 @@ extern config configurazione;
 
 int socket_c;
 
+
 int openConnection(const char* sockname, int msec, const struct timespec abstime){
     SA sockaddr;
     memset(&sockaddr, 0, sizeof(SA));
@@ -43,7 +44,7 @@ int openConnection(const char* sockname, int msec, const struct timespec abstime
         else{
             if(errno == ENOTCONN || errno == ECONNREFUSED || errno == ENOENT){
                 printf("Non connesso, s_server non è ancora pronto!\nTentativo: %d\n\n",tentativi+1);
-                usleep(msec * 1000);
+                msleep(msec);
                 diff = time(NULL) - before;
             }
             else{
@@ -81,7 +82,7 @@ int openFile(const char* pathname, int flags){
     memset(&r, 0, sizeof(request));
     memset(&feedback, 0, sizeof(response));
     r.flags = flags;
-    r.type = open_file; 
+    r.type = OPEN_FILE; 
     r.socket_fd = socket_c;
     r.file_name = malloc(sizeof(char)* NAME_MAX);
     memset(&r.file_name,0,sizeof(r.file_name));
@@ -155,7 +156,7 @@ int readFile(const char* pathname, void** buf, size_t* size){
     memset(&r.file_name,0,sizeof(r.file_name));
     memset(&feedback, 0, sizeof(response));
     memset(&feedback.content,0,sizeof(feedback.content));
-    r.type = read_file; 
+    r.type = READ_FILE; 
     r.socket_fd = socket_c;
 
     memset(&feedback.content,0,sizeof(feedback.content));
@@ -202,7 +203,6 @@ int readFile(const char* pathname, void** buf, size_t* size){
     *buf = malloc(sizeof(char) * (feedback.size + 1));
     memset(buf, 0, feedback.size + 1);
     strncpy(*buf,feedback.content,*size);
-    pritnf("%s\n",*buf);
     errno = 0;
     return 0;
 
@@ -222,7 +222,7 @@ int readNFiles(int N, const char* dirname){
     }
     else r.dirname = NULL;
 
-    r.type = read_N_file; 
+    r.type = READ_N_FILE; 
     r.socket_fd = socket_c;
     r.c = N;
 
@@ -279,7 +279,7 @@ int writeFile(const char* pathname, const char* dirname){
     memset(&feedback, 0, sizeof(response));
     memset(&feedback.content,0,sizeof(feedback.content));
 
-    r.type = write_file;
+    r.type = WRITE_FILE;
     r.socket_fd = socket_c;
     MY_REALPATH(writeFile,pathname,r.file_name);
     if(dirname != NULL){
@@ -341,7 +341,7 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
 
     r.buff = buf;
     r.request_size = size;
-    r.type = append_file;
+    r.type = APPEND_FILE;
     r.socket_fd = socket_c;
     MY_REALPATH(appendToFile,pathname,r.file_name);
     if(dirname != NULL){
@@ -394,8 +394,50 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
 int lockFile(const char* pathname);
 int unlockFile(const char* pathname);
 int closeFile(const char* pathname){
+    int b;
+    request r;
+    response feedback;
+    memset(&r,0,sizeof(request));
+    r.file_name = malloc(sizeof(char)*NAME_MAX);
+    memset(&r.file_name,0,sizeof(r.file_name));;
+    memset(&feedback, 0, sizeof(response));
+    memset(&feedback.content,0,sizeof(feedback.content));
+
+    r.type = CLOSE_FILE;
+    r.socket_fd = socket_c;
+    MY_REALPATH(closeFile,pathname,r.file_name);
+
+    if(b = writen(socket_c,&r,sizeof(r)) == -1){
+        errno = EAGAIN;
+        return -1;
+    }
+    free(r.file_name);
     
+    if(b = readn(socket_c,&feedback,sizeof(feedback)) == -1){
+        errno = EAGAIN;
+        return -1;
+    }
+    switch (feedback.type){
+        
+    case FILE_NOT_OPENED:
+		errno = 0;
+        return 0;
+
+    case FILE_NOT_EXIST:
+		errno = ENOENT;
+        return -1;
+
+    case CLOSE_FILE_SUCCESS:
+        printf("closeFile ' %s ' ha avuto successo\n",pathname);
+        break;
+          
+    default: break;
+    
+    }
+    errno = 0;
+    return 0;  
 }
+
 int removeFile(const char* pathname){
     
     int b;
@@ -407,9 +449,7 @@ int removeFile(const char* pathname){
     memset(&feedback, 0, sizeof(response));
     memset(&feedback.content,0,sizeof(feedback.content));
 
-
-
-    r.type = remove_file;
+    r.type = REMOVE_FILE;
     r.socket_fd = socket_c;
     MY_REALPATH(appendToFile,pathname,r.file_name);
    

@@ -10,7 +10,8 @@
         "random": "c",
         "myhashstoragefile.h": "c",
         "fstream": "c",
-        "select.h": "c"
+        "select.h": "c",
+        "serverapi.h": "c"
     },
     "C_Cpp.dimInactiveRegions": false
 }

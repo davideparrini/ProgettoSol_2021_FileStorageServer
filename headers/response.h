@@ -18,6 +18,7 @@ typedef enum{
     O_CREATE_LOCK_SUCCESS,
     APPEND_FILE_SUCCESS,
     REMOVE_FILE_SUCCESS,
+    CLOSE_FILE_SUCCESS,
 
     NO_SPACE_IN_SERVER,
     WRITE_FILE_FAILURE,
@@ -32,6 +33,7 @@ typedef struct s{
     int size;
     int flags;
     int c; //contatore generico
+    unsigned long bytes_used;
     char content[MAX_LENGHT_FILE];
 }response;
 

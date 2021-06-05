@@ -150,13 +150,13 @@ void* worker_thread_function(void* args){
 void handle_task(int *pclient_socket){
     int client_socket = *(int*) pclient_socket;
     char actualpath[NAME_MAX+1];
-    request richiesta_server;
+    request r_from_client;
 
-    memset(&richiesta_server, 0, sizeof(request));
-    readn(client_socket, &richiesta_server, sizeof(request)); 
+    memset(&r_from_client, 0, sizeof(request));
+    readn(client_socket, &r_from_client, sizeof(request)); 
 
 
-    if(do_task(&richiesta_server,client_socket)){
+    if(do_task(&r_from_client,client_socket)){
         close(client_socket);
         return ;
     } 
@@ -165,42 +165,42 @@ void handle_task(int *pclient_socket){
    // DA RIGUARDARE
 }
 
-int do_task(request* req_server,int* client_s){
+int do_task(request* r_from_client,int* client_s){
     //In caso di successo ritorna 1 else 0
     int flag_open_lock = 0;
     int flag_lock = 0;
     int b,res = 0;
     response feedback;
     memset(feedback.content,0,sizeof(feedback.content));
-    switch (req_server->type){
+    switch (r_from_client->type){
 
-    case open_file:
-        if(task_openFile(req_server,&feedback,&flag_open_lock,&flag_lock)){
+    case OPEN_FILE:
+        if(task_openFile(r_from_client,&feedback,&flag_open_lock,&flag_lock)){
             res = 1;
             stats_op.n_openfile++;
         }    
         break;
-    case read_file:
-        if(task_readFile(req_server,&feedback)){
+    case READ_FILE:
+        if(task_readFile(r_from_client,&feedback)){
             res = 1;
             stats_op.n_readfile++;
         } 
         break;
 
-    case read_N_file:
-        if(task_read_N_File(req_server,&feedback)){
+    case READ_N_FILE:
+        if(task_read_N_File(r_from_client,&feedback)){
             res = 1;
             stats_op.n_readNfile++;
         }  
         break;
-    case write_file:
-        if(task_writeFile(req_server,&feedback)){
+    case WRITE_FILE:
+        if(task_writeFile(r_from_client,&feedback)){
             res = 1;
             stats_op.n_writefile++;
         }  
         break;
-    case append_file:
-        if(task_appendFile(req_server,&feedback)){
+    case APPEND_FILE:
+        if(task_appendFile(r_from_client,&feedback)){
             res = 1;
             stats_op.n_appendfile++;
         }  
@@ -212,9 +212,10 @@ int do_task(request* req_server,int* client_s){
     while(flag_open_lock || flag_lock){
 
     }  
-    
+    PRINT_ERRNO(r_from_client->type,errno);
     if(b = writen(client_s,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
+        return 0;
     }
     return res;
 }
@@ -248,12 +249,8 @@ int task_openFile(request* r, response* feedback, int* flag_open_lock,int* flag_
         break;
     
     case O_LOCK :
-        
-    break;
-    
-    default: break;
-    }
-    if(r->flags != O_CREATE){
+        break;
+    case O_NOFLAGS :
         if(f == NULL)  feedback->type = O_CREATE_NOT_SPECIFIED_AND_FILE_NEXIST;
         else{
             if(f->locked_flag == 1) feedback->type = CANNOT_ACCESS_FILE_LOCKED;
@@ -271,7 +268,12 @@ int task_openFile(request* r, response* feedback, int* flag_open_lock,int* flag_
                 
             }
         }   
+      
+    break;
+
+    default: break;
     }
+    
 
     if(b = writen(r->socket_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
@@ -454,6 +456,26 @@ int task_lock_file(request* r, response* feedback){
 
 int task_close_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
+    int b,res = 0;
+    file_t* file = research_file(storage,r->file_name);
+    if(file == NULL){
+        feedback->type = FILE_NOT_EXIST;
+    }
+    else{    
+        if(file->opened_flag == 0){
+            feedback->type = FILE_NOT_OPENED;
+            goto finetask;
+        }
+        file->opened_flag = 0;
+        feedback->type = CLOSE_FILE_SUCCESS;
+        res = 0;
+    }
+
+finetask:
+    if(b = writen(r->socket_fd,&feedback,sizeof(feedback)) == -1){
+        errno = EAGAIN;
+    }
+    return res;
 }
 
 int task_remove_file(request* r, response* feedback){
@@ -468,9 +490,10 @@ int task_remove_file(request* r, response* feedback){
             feedback->type = CANNOT_ACCESS_FILE_LOCKED;
             goto finetask;
         }
-        pthread_mutex_lock(&mutex_file);
         file->locked_flag = 1;
+        pthread_mutex_lock(&mutex_file);
         remove_file_server(&storage,file);
+        ins_tail_list(&files_rejected,file);
         pthread_mutex_unlock(&mutex_file);
         feedback->type = REMOVE_FILE_SUCCESS;
         res = 1;
@@ -493,8 +516,8 @@ void create_FileLog(){
     }
     fprintf(f,"Numero di file attualmente nel server : %d\n",storage.n_file);
     fprintf(f,"Numero di file massimo memorizzato nel server : %d\n",storage.stat_max_n_file);
-    fprintf(f,"Memoria attualmente utilizzata in Mbytes nel file storage : %ld\n",bytesToMb(storage.memory_used));
-    fprintf(f,"Dimensione massima in Mbytes raggiunta dal file storage : %ld\n",storage.stat_dim_file);
+    fprintf(f,"Memoria attualmente utilizzata in Mbytes nel file storage : %lu\n",bytesToMb(storage.memory_used));
+    fprintf(f,"Dimensione massima in Mbytes raggiunta dal file storage : %lu\n",storage.stat_dim_file);
     fprintf(f,"Numero di volte in cui l’algoritmo di rimpiazzamento della cache è stato eseguito per selezionare uno o più \
     file “vittima” : %d\n",storage.stat_n_replacing_algoritm); 
 

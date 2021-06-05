@@ -14,7 +14,7 @@ typedef struct node{
 	struct timespec creation_time;
 	char* abs_path;
 	char* filename;
-	long dim_bytes;
+	unsigned long dim_bytes;
 	int modified_flag;
 	int opened_flag;
 	int locked_flag;
@@ -36,16 +36,16 @@ typedef struct temp_list{
 
 typedef struct _list{
 	int size;
-	long dim_bytes;
+	unsigned long dim_bytes;
 	file_t *head;
 	file_t *tail;
 }list;
 
 typedef struct _hash{
 	int len;
-	long memory_used;
-	long memory_used_from_modified_files;
-    long memory_capacity;
+	unsigned long memory_used;
+	unsigned long memory_used_from_modified_files;
+    unsigned long memory_capacity;
 	int n_file;
 	int n_files_free;
 	int n_file_modified;
@@ -53,7 +53,7 @@ typedef struct _hash{
     int max_size_cache;
 
 	int stat_max_n_file;
-	long stat_dim_file;
+	unsigned long stat_dim_file;
 	int stat_n_replacing_algoritm;
 	
 	list *cell;

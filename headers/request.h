@@ -5,15 +5,15 @@
 
 typedef enum e{
     
-    open_file,
-    read_file,
-    read_N_file,
-    write_file,
-    append_file,
-    lock_file,
-    unlock_file,
-    close_file,
-    remove_file
+    OPEN_FILE,
+    READ_FILE,
+    READ_N_FILE,
+    WRITE_FILE,
+    APPEND_FILE,
+    LOCK_FILE,
+    UNLOCK_FILE,
+    CLOSE_FILE,
+    REMOVE_FILE
 
 }req_type;
 

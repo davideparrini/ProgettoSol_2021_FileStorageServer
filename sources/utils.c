@@ -31,3 +31,7 @@ long bytesToMb(long bytes){
 long MbToBytes(long Mb){
   return Mb*1048576;
 }
+
+int msleep(unsigned int tms) {
+  return usleep(tms * 1000);
+}

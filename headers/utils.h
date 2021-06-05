@@ -36,6 +36,10 @@
 #endif
 
 
+#if !defined(O_NOFLAGS)
+#define O_NOFLAGS 2
+#endif
+
 
 typedef struct sockaddr_un SA;
 
@@ -69,11 +73,20 @@ typedef struct S{
 		int errno_copy = errno;	 \
         exit(errno_copy); \
 	}
+    
 #define PRINT_ERRNO(from_where,err) \
     if(err != 0){ \
         perror(#from_where); \
         exit(err); \
-    } \
+    } 
+
+#define PRINT_OP(nome_operazione,file_riferimento,orario,esito,bytes) \
+    printf("Tipo operazione :%s\nSul file: %s\nOre: %s\nEsito: ",nome_operazione,file_riferimento,ctime(orario) );\
+    if(!esito){ \
+        pritnf("Successo!\n"); \
+        if(bytes != 0) printf("bytes letti/scritti : %lu\n",bytes);        \
+    }           \
+    else printf("Fallimento!\n")
 
 static inline int readn(long fd, void *buf, size_t size) {
     size_t left = size;
@@ -108,7 +121,7 @@ static inline int writen(long fd, void *buf, size_t size) {
     return 1;
 }
 
-
+int msleep(unsigned int tms);
 int isNumber(const char* s, long* n);
 int isdot(const char dir[]);
 
