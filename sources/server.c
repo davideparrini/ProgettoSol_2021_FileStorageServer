@@ -431,13 +431,12 @@ int task_append_file(request* r, response* feedback){
             fclose(f);
             free(f);
             feedback->type = APPEND_FILE_SUCCESS;
-            pthread_mutex_unlock(&mutex_file);
             res = 1;
         }
         else{
-            pthread_mutex_unlock(&mutex_file);
             feedback->type = NO_SPACE_IN_SERVER;
-        }    
+        }
+        pthread_mutex_unlock(&mutex_file);    
     }
 
 finetask:

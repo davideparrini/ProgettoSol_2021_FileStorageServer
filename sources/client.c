@@ -27,22 +27,21 @@ int arg_h(const char* s);
 int arg_f(const char* s,char* sockname);
 int arg_w(const char* s);
 int arg_W(const char* s);
-int arg_D(const char* s);
+int arg_D(const char* s,char* temp_optarg);
 int arg_r(const char* s);
 int arg_R(int n);
-int arg_d(const char* s);
+int arg_d(const char* s,char* temp_optarg);
 int arg_t(int mill_sec);
 int arg_l(const char* s);
 int arg_u(const char* s);
 int arg_c(const char* s);
 int arg_p();
 
-//PRINT_ERRNO va chiamata qua nel client.c
 
 int main(int argc, char const *argv[]){
     char* socket_name = malloc(sizeof(char)*MAX_SOCKET_PATH);
     memset(socket_name,0,strlen(socket_name));
-    int opt;
+    
     struct timespec timer_connection;
     timer_connection.tv_nsec = 0;
     timer_connection.tv_sec = 20;
@@ -58,17 +57,44 @@ int main(int argc, char const *argv[]){
         exit(EXIT_FAILURE);
     }
 
-    int r = 0,R = 0, w = 0, W = 0,f = 0, h = 0,p = 0;
+    char* temp_optarg = malloc(sizeof(char)*NAME_MAX);
+    int opt, temp_opt = 0;
+    int r = 0,R = 0, w = 0, W = 0,f = 0, h = 0,p = 0,d = 0,D =0;
 
     while(opt = getopt(argc, argv,"hf:w:W:D:r:R:d:t:l:u:c:p") != -1){
+        if(temp_opt != 0){
+            switch (temp_opt){
+
+            case 'r':
+                if(opt == 'd') arg_d(optarg,temp_optarg);
+                else arg_r(temp_optarg);
+                break;
+
+            case 'R':
+                if(opt == 'd') arg_d(optarg,temp_optarg);
+                else arg_R(atoi(temp_optarg));
+                break;
+
+            case 'w':
+                if(opt == 'D') arg_D(optarg,temp_optarg);
+                else arg_w(temp_optarg);
+                break;
+
+            case 'W':
+                if(opt == 'D') arg_D(optarg,temp_optarg);
+                else arg_W(temp_optarg);
+                break;
+            
+            default: break;
+            }
+        }
         switch (opt){
         case 'h': 
             if(h){
                 printf("Non si può ripetere l'argomento 'h'!\n");
                 break;
             }
-            arg_h(argv[0]); 
-            msleep(msec_between_req); 
+            arg_h(argv[0]);
             break;
 
         case 'f':
@@ -76,61 +102,56 @@ int main(int argc, char const *argv[]){
                 printf("Non si può ripetere l'argomento 'f'!\n");
                 break;
             } 
-            arg_f(optarg,socket_name); 
-            msleep(msec_between_req); 
+            arg_f(optarg,socket_name);
             break;
 
         case 'w':   
-            arg_w(optarg);
-            w = 1; 
-            msleep(msec_between_req); 
+            memset(temp_optarg,0,sizeof(temp_optarg));
+            strcpy(temp_optarg,optarg);
             break; 
 
         case 'W': 
-            arg_W(optarg); 
-            W = 1; 
-            msleep(msec_between_req); 
+            memset(temp_optarg,0,sizeof(temp_optarg));
+            strcpy(temp_optarg,optarg);
             break;
 
         case 'D': 
-            arg_D(optarg); 
-            msleep(msec_between_req); 
+            if(temp_opt != 'w' && temp_opt != 'W'){
+                printf("Errore! Opzione D non può essere utilizzata senza prima aver utilizzato -w o -W\n");
+                break;
+            }
             break;
 
-        case 'r': 
-            arg_r(optarg); 
-            r = 1; 
-            msleep(msec_between_req); 
+        case 'r':
+            memset(temp_optarg,0,sizeof(temp_optarg));
+            strcpy(temp_optarg,optarg);
             break;
-        case 'R': 
-            arg_R(atoi(optarg)); 
-            R = 1; 
-            msleep(msec_between_req); 
+        case 'R':
+            memset(temp_optarg,0,sizeof(temp_optarg));
+            strcpy(temp_optarg,optarg); 
             break;
 
         case 'd': 
-            arg_d(optarg); 
-            msleep(msec_between_req); 
+            if(!r && !R ){
+                printf("Errore! Opzione d non può essere utilizzata senza prima aver utilizzato -r o -R\n");
+                break;
+            }
             break;
 
         case 't': 
             arg_t(atoi(optarg)); 
-            msleep(msec_between_req); 
             break;
 
         case 'l': 
             arg_l(optarg);
-            msleep(msec_between_req); 
             break;
 
         case 'u': 
             arg_u(optarg); 
-            msleep(msec_between_req); 
             break;
 
         case 'c': 
-            arg_c(optarg); 
-            msleep(msec_between_req); 
+            arg_c(optarg);
             break;
 
         case 'p':
@@ -138,8 +159,7 @@ int main(int argc, char const *argv[]){
                 printf("Non si può ripetere l'argomento 'p'!\n");
                 break;
             }  
-            arg_p();
-            msleep(msec_between_req);  
+            arg_p();           
             break;
 
         case ':': 
@@ -161,15 +181,38 @@ int main(int argc, char const *argv[]){
             printf("l'opzione '-%c' non e' gestita\n", optopt);
             break;
 
-        default:
-            break;
+        default: break;
         }
+        temp_opt = opt;
+        msleep(msec_between_req);  
+    }
 
+    switch(temp_opt){
+
+    case 'r':
+        arg_r(temp_optarg);
+        break;
+
+    case 'R':
+        arg_R(atoi(temp_optarg));
+        break;
+
+    case 'w':
+        arg_w(temp_optarg);
+        break;
+
+    case 'W':
+        arg_W(temp_optarg);
+        break;
+
+    default: break;            
     }
     msec_between_req = 0;
+    r = 0,R = 0, w = 0, W = 0,f = 0, h = 0,p = 0;
 
 
-    if(closeConnection == -1){
+
+    if(closeConnection(socket_c) == -1){
         fprintf(stderr, "closeConnection Value of errno : %d\n", errno);
     }
 
@@ -178,9 +221,20 @@ int main(int argc, char const *argv[]){
 
 
 int arg_h(const char* s){
-    printf("Helper message!\nUsage: %s \n-f filename\n-w dirname[,n=0] \
-    \n-W file1[,file2]..\n-D dirname\n-r file1[,file2]..\n-R [n=0]\n-d dirname\n \
-    -t time\n-l file1[,file2]..\n-u file1[,file2]..\n-c file1[,file2]..\n-p\n");
+    printf("Helper message!\n\nUsage: %s\n\n",s);
+    printf("-f filename\tspecifica il nome del socket AF_UNIX a cui connettersi\n\n");
+    printf("-w dirname[,n=0]\tinvia al server n (se non specificato o 0 invia tutti i file) file nella cartella ‘dirname’ a seguito di capacity misses. Può essere utilizzato solo in seguito ai comandi '-w' o '-W'\n\n");
+    printf("-W file1[,file2]..\t lista di nomi di file da scrivere nel server separati da ‘,’(esempio: -r pippo,pluto,minni)\n\n");
+    printf("-D dirname\t  cartella in memoria secondaria dove vengono scritti (lato client) i file che il server rimuove a\n\n");
+    printf("-r file1[,file2]..\tlista di nomi di file da leggere dal server separati da ‘,’ (esempio: -r pippo,pluto,minni)\n\n");
+    printf("-R [n=0]\t tale opzione permette di leggere ‘n’ file qualsiasi attualmente memorizzati nel server; se n=0 (o non è specificato) allora vengono letti tutti i file presenti nel server\n\n");
+    printf("-d dirname\tcartella in memoria secondaria dove scrivere i file letti dal server con l’opzione ‘-r’ o ‘-R’. Può essere utilizzato solo in seguito ai comandi '-r' o '-R'\n\n");
+    printf("-t time\ttempo in millisecondi che intercorre tra l’invio di due richieste successive al server, se non specificato è pari a 0.0s\n\n");
+    printf("-l file1[,file2]..\t lista di nomi di file su cui acquisire la mutua esclusione\n\n");
+    printf("-u file1[,file2]..\tlista di nomi di file su cui rilasciare la mutua esclusione\n\n");
+    printf("-c file1[,file2]..\tlista di file da rimuovere dal server se presenti\n\n");
+    printf("-p\tabilita le stampe sullo standard output per ogni operazione\n\n");
+    printf("\nLe opzioni '-h' '-p' '-f' non possono essere ripetute, eventuali ripetizioni verranno ignorate\n\n");
     return 0;
 }
 
@@ -206,7 +260,7 @@ int arg_w(const char* s){
 
 }
 int arg_W(const char* s);
-int arg_D(const char* s);
+int arg_D(const char* s,char* temp_optarg);
 
 int arg_r(const char* s){
     char* token = strtok(s,",");
@@ -243,7 +297,7 @@ int arg_r(const char* s){
 }
 
 int arg_R(int n);
-int arg_d(const char* s);
+int arg_d(const char* s,char* temp_optarg);
 
 int arg_t(int mill_sec){
     msec_between_req = mill_sec;
