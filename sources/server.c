@@ -44,13 +44,15 @@ config configurazione;
 hashtable storage;
 list files_rejected;
 stats stats_op;
+int signal_pipe[2];
 
 void cleanup();
-void handle_task(int *pclient_socket);
+
 void setUpServer(config* Server);
 
 void* worker_thread_function(void* args);
-void* main_thread_function(void* args);
+void* manager_thread_function(void* args);
+void handle_connection(int *pclient_socket);
 int do_task(request* req_server,int* client_s);
 int task_openFile(request* r, response* feedback, int* flag_open_lock,int* flag_lock);
 int task_read_file(request* r, response* feedback);
@@ -72,20 +74,42 @@ int main(){
     init_list(&files_rejected);
     init_Stats(&stats_op);
 
-    pthread_t thread_main;
+    pthread_t thread_manager;
     pthread_t thread_workers[configurazione.n_thread_workers];
+ ////////////////////////////
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGINT); 
+    sigaddset(&mask, SIGQUIT);
+    sigaddset(&mask, SIGHUP);
+
+
+    if (pthread_sigmask(SIG_BLOCK, &mask,NULL) != 0) {
+	fprintf(stderr, "FATAL ERROR\n");
+    }
    
-    pthread_create(&thread_main,NULL, main_thread_function,NULL);
+    if (pipe(signal_pipe)==-1) {
+	perror("pipe");
+    }
+    
+    pthread_t sighandler_thread;
+ //////
+    pthread_create(&sighandler_thread,NULL, sigHandler,&mask);
+    pthread_create(&thread_manager,NULL, manager_thread_function,NULL);
     for(size_t i = 0; i < configurazione.n_thread_workers;i++){
         pthread_create(&thread_workers[i],NULL, worker_thread_function,NULL);
     }
 
-    pthread_join(&thread_main,NULL);
+    pthread_join(&thread_manager,NULL);
     for(size_t i = 0; i < configurazione.n_thread_workers;i++){
         pthread_join(&thread_workers[i],NULL);
     }
-    create_FileLog();
 
+///////////////
+    pthread_join(sighandler_thread, NULL);
+//////////////
+    create_FileLog();
+    cleanup();
     return 0;
 }
 void cleanup() {
@@ -93,10 +117,10 @@ void cleanup() {
 }
 
 
-void* main_thread_function(void* args){
+void* manager_thread_function(void* args){
     cleanup();
     atexit(cleanup);
-    int server_socket, client_socket;
+    int server_socket, client_socket,b, sig;
     SA serv_addr;
 
     if(server_socket = socket(AF_UNIX, SOCK_STREAM, 0) == -1){
@@ -116,18 +140,54 @@ void* main_thread_function(void* args){
         perror("Errore Listen Socket_s");
         exit(EXIT_FAILURE);
     }
-    while(1){
-        
-        if(client_socket = accept(server_socket,(struct sockaddr*)&client_socket, sizeof(client_socket)) == -1){
-            perror("Errore Accept socket_s");
+/////
+    fd_set set, tmpset;
+    FD_ZERO(&set);
+    FD_ZERO(&tmpset);
+
+    FD_SET(server_socket, &set);        // aggiungo il listener fd al master set
+    FD_SET(signal_pipe[0], &set);  // aggiungo il descrittore di lettura della signal_pipe
+    int fdmax = (server_socket > signal_pipe[0]) ? server_socket : signal_pipe[0];
+//////
+    printf("Pronto a ricevere connessioni!\n");
+    volatile long termina = 0;
+    while(!termina){
+        tmpset = set;
+        if(select(fdmax+1,&tmpset,NULL,NULL,NULL) == -1){
+            perror("Errore in select");
             exit(EXIT_FAILURE);
         }
-        printf("\nConnesso al client!\n\n");
-        pthread_mutex_lock(&mutex);
-        push_q(&client_socket);
-        pthread_cond_signal(&cond_var);
-        pthread_mutex_unlock(&mutex);
+        for(int i = 0;i <= fdmax;i++){
+            if(FD_ISSET(i,&tmpset)){
+                if(i == server_socket){
+                    if(client_socket = accept(server_socket,(struct sockaddr*)&client_socket, sizeof(client_socket)) == -1){
+                        perror("Errore Accept socket_s");
+                        exit(EXIT_FAILURE);
+                    }
+                    pthread_mutex_lock(&mutex);
+                    push_q(&client_socket);
+                    pthread_cond_signal(&cond_var);
+                    pthread_mutex_unlock(&mutex);
 
+                }
+            }
+            if (i == signal_pipe[0]) {
+                // ricevuto un segnale, esco ed inizio il protocollo di terminazione
+                if(b = readn(signal_pipe[0],&sig,sizeof(int) == -1)){
+                    perror("Errore readn pipe");
+                    exit(EXIT_FAILURE);
+                }
+                if(sig == SIGINT || sig == SIGQUIT){
+                    termina = 1;
+                    break;
+                }
+                if(sig == SIGHUP){
+                    
+                    
+                    break;
+                }
+            }
+        }
     }
 }
 
@@ -135,26 +195,23 @@ void* worker_thread_function(void* args){
     while (1){
         int *pclient;
         pthread_mutex_lock(&mutex);
-        if((pclient = pop_q()) == NULL){
+        while((pclient = pop_q()) == NULL){
             pthread_cond_wait(&cond_var,&mutex);
         }    
-        pclient = pop_q();
         pthread_mutex_unlock(&mutex);
         if(pclient != NULL){
             //connessi
-            handle_task(pclient);    
+            handle_connection(pclient);    
         }
     }
 
 }
-void handle_task(int *pclient_socket){
+void handle_connection(int *pclient_socket){
     int client_socket = *(int*) pclient_socket;
-    char actualpath[NAME_MAX+1];
     request r_from_client;
 
     memset(&r_from_client, 0, sizeof(request));
     readn(client_socket, &r_from_client, sizeof(request)); 
-
 
     if(do_task(&r_from_client,client_socket)){
         close(client_socket);
@@ -203,6 +260,33 @@ int do_task(request* r_from_client,int* client_s){
         if(task_appendFile(r_from_client,&feedback)){
             res = 1;
             stats_op.n_appendfile++;
+        }  
+        break;
+    
+    case REMOVE_FILE:
+        if(task_remove_file(r_from_client,&feedback)){
+            res = 1;
+            stats_op.n_removefile++;
+        }  
+        break;
+    case CLOSE_FILE:
+        if(task_close_file(r_from_client,&feedback)){
+            res = 1;
+            stats_op.n_closefile++;
+        }  
+        break;
+    
+    case LOCK_FILE:
+        if(task_lock_file(r_from_client,&feedback)){
+            res = 1;
+            stats_op.n_lockfile++;
+        }  
+        break;
+    
+    case UNLOCK_FILE:
+        if(task_unlock_file(r_from_client,&feedback)){
+            res = 1;
+            stats_op.n_unlockfile++;
         }  
         break;
     
@@ -703,4 +787,32 @@ void init_Stats(stats* statistiche_operazioni){
     statistiche_operazioni->n_lockfile = 0;
     statistiche_operazioni->n_unlockfile = 0;
 
+}
+
+static void *sigHandler(void *arg) {
+    sigset_t *set = (sigset_t*)arg;
+
+    for( ;; ) {
+        int sig,b;
+        int r = sigwait(set, &sig);
+        if (r != 0) {
+            errno = r;
+            perror("FATAL ERROR 'sigwait'");
+            return NULL;
+        }
+
+        switch(sig) {
+        case SIGINT:
+        case SIGHUP:
+        case SIGQUIT:
+            if(b = writen(signal_pipe[1],&sig,sizeof(int)) == -1){
+                perror("Errore writen pipe");
+                exit(EXIT_FAILURE);
+            }
+            close(signal_pipe[1]);  // notifico il listener thread della ricezione del segnale
+            return NULL;
+        default:  ; 
+        }
+    }
+    return NULL;	   
 }

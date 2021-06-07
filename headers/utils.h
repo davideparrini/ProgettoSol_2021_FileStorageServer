@@ -51,6 +51,8 @@ typedef struct S{
     char log_file_path[NAME_MAX];
 }config;
 
+
+
 #define SYSCALL_EXIT(name, r, sc, str, ...)	\
     if ((r=sc) == -1) {				\
 	perror(#name);				\

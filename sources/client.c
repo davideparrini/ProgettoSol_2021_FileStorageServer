@@ -53,7 +53,7 @@ int main(int argc, char const *argv[]){
     }
 
     if(openConnection(configurazione.n_thread_workers,100,timer_connection) == -1){
-        fprintf(stderr, "openConnection Value of errno : %d\n", errno);
+        perror("Non connesso, errore in openConnection");
         exit(EXIT_FAILURE);
     }
 
@@ -126,6 +126,7 @@ int main(int argc, char const *argv[]){
             memset(temp_optarg,0,sizeof(temp_optarg));
             strcpy(temp_optarg,optarg);
             break;
+
         case 'R':
             memset(temp_optarg,0,sizeof(temp_optarg));
             strcpy(temp_optarg,optarg); 
