@@ -1,15 +1,5 @@
 #include <myhashstoragefile.h>
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <time.h>
-#include <sys/stat.h>
-#include <string.h>
-
-#include <utils.h>
-
-
 
 file_t* init_file(char *namefile){
 	file_t* new = malloc(sizeof(file_t));

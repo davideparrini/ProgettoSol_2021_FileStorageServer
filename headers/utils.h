@@ -48,7 +48,6 @@ typedef struct S{
     int max_n_file;
     int memory_capacity;
     char socket_name[NAME_MAX];
-    char log_file_path[NAME_MAX];
 }config;
 
 

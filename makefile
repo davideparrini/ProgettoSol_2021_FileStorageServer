@@ -1,29 +1,40 @@
-
-
 CC = gcc
-C_FLAGS = -Wall -pedantic -std=c99 -g -fPIC
+CFLAGS = -Wall -pedantic -std=c99 -g -fPIC
 THREAD_FLAGS = -lpthread 
 INCLUDES = -I./headers
 OBJS = ./objects
+LIBS = ./libs
+SRC = ./sources
 
-CLIENT_DEPS = sources/client.c libs/libapi.so libs/libclient.so
+CLIENT_DEPS = $(SRC)/client.c $(LIBS)/libapi.so $(LIBS)/libclient.so
+SERVER_DEPS =  $(SRC)/serves.c $(LIBS)/libserver.so
 
-SERVER_DEPS = sources/serves.c libs/libserver.so
 
-
-.PHONY : all, cleanall, test1, test2
+.PHONY : all, cleanall
 .SUFFIXES: .c .h
 
-$(OBJS)/%.o: sources/%.c
+$(OBJS)/%.o: $(SRC)/%.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
 
 
-libs/libapi.so: $(OBJS)/utils.o 
-	$(CC) -shared -o libs/libapi.so $^
+$(LIBS)/libapi.so: $(OBJS)/utils.o 
+	$(CC) -shared -o $(LIBS)/libapi.so $^
 
-libs/libclient.so: $(OBJS)/utils $(OBJS)/serverAPI.O
-	$(CC) -shared -o libs/libclient.so $^
+$(LIBS)/libclient.so: $(OBJS)/utils $(OBJS)/serverAPI.O
+	$(CC) -shared -o $(LIBS)/libclient.so $^
 
+server: $(SERVER_DEPS)
+	$(CC) $(CFLAGS) $(INCLUDES) server.c -o server -Wl,-rpath,$(LIBS) -L ./libs -lserv -lapi $(THREAD_FLAGS) 
 
-all: 
-	make -B
+client: $(SERVER_DEPS)
+	$(CC) $(CFLAGS) $(INCLUDES) client.c -o client -Wl,-rpath,$(LIBS) -L ./libs -lserv -lapi $(THREAD_FLAGS)
+
+all: server client
+
+cleanall: 	
+	-rm -f read_files/*
+	-rm -f rejected_files/*
+	-rm -f $(OBJS)/*.o
+	-rm -f $(LIBS)/*.so
+	-rm -f ./logs/*
+	-rm /tmp/server_sock

@@ -1,23 +1,5 @@
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <time.h>
-#include <sys/socket.h>
-#include <pthread.h>
-#include <unistd.h>
-#include <sys/un.h>
-#include <sys/select.h>
-#include <limits.h>
-#include <signal.h>
-#include <libgen.h>
-
 #include <myqueue.h>
 #include <utils.h>
-#include <request.h>
-#include <response.h>
 #include <myhashstoragefile.h>
 
 typedef struct {
@@ -35,10 +17,11 @@ typedef struct {
 
 #define BUFSIZE 1024
 
-#define FILELOG "./filelog.txt"
+#define FILELOG "./logs/filelog.txt"
 pthread_cond_t cond_var = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_file = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutex_pipe = PTHREAD_MUTEX_INITIALIZER;
 
 config configurazione;
 hashtable storage;
@@ -49,7 +32,7 @@ int signal_pipe[2];
 void cleanup();
 
 void setUpServer(config* Server);
-
+void print_serverConfig();
 void* worker_thread_function(void* args);
 void* manager_thread_function(void* args);
 void handle_connection(int *pclient_socket);
@@ -70,13 +53,15 @@ void init_Stats();
 int main(){
 
     setUpServer(&configurazione);
+    print_serverConfig();
     init_hash(&storage,configurazione);
     init_list(&files_rejected);
     init_Stats(&stats_op);
 
     pthread_t thread_manager;
     pthread_t thread_workers[configurazione.n_thread_workers];
- ////////////////////////////
+ 
+
     sigset_t mask;
     sigemptyset(&mask);
     sigaddset(&mask, SIGINT); 
@@ -84,34 +69,57 @@ int main(){
     sigaddset(&mask, SIGHUP);
 
 
-    if (pthread_sigmask(SIG_BLOCK, &mask,NULL) != 0) {
-	fprintf(stderr, "FATAL ERROR\n");
+    if (pthread_sigmask(SIG_SETMASK, &mask,NULL) != 0) {
+	    fprintf(stderr, "FATAL ERROR sigmask \n");
+        goto _exit;
     }
    
     if (pipe(signal_pipe)==-1) {
-	perror("pipe");
+	    perror("pipe");
+        goto _exit;
     }
     
     pthread_t sighandler_thread;
- //////
-    pthread_create(&sighandler_thread,NULL, sigHandler,&mask);
-    pthread_create(&thread_manager,NULL, manager_thread_function,NULL);
+
+    if(pthread_create(&sighandler_thread,NULL, sigHandler,&mask) == -1){
+        perror("Errore creazione sighandler_thread");
+        goto _exit;
+    }
+    if(pthread_create(&thread_manager,NULL, manager_thread_function,NULL) == -1){
+        perror("Errore creazione thread_manager");
+        goto _exit;
+    }
     for(size_t i = 0; i < configurazione.n_thread_workers;i++){
-        pthread_create(&thread_workers[i],NULL, worker_thread_function,NULL);
+        if(pthread_create(&thread_workers[i],NULL, worker_thread_function,NULL) == -1){
+            perror("Errore creazione thread_workers");
+            goto _exit;
+        }
     }
 
-    pthread_join(&thread_manager,NULL);
+    if(pthread_join(&thread_manager,NULL) != 0){
+        perror("Errore join thread_manager");
+        goto _exit;
+    }
     for(size_t i = 0; i < configurazione.n_thread_workers;i++){
-        pthread_join(&thread_workers[i],NULL);
+        if(pthread_join(&thread_workers[i],NULL) != 0){
+            perror("Errore join thread_workers");
+            goto _exit;
+        }
     }
 
-///////////////
-    pthread_join(sighandler_thread, NULL);
-//////////////
+    if(pthread_join(sighandler_thread, NULL) != 0){
+        perror("Errore join sighandler_thread");
+        goto _exit;
+    }
+
     create_FileLog();
     cleanup();
     return 0;
+_exit:
+    cleanup();
+    return -1;    
 }
+
 void cleanup() {
   unlink(configurazione.socket_name);
 }
@@ -150,7 +158,7 @@ void* manager_thread_function(void* args){
     int fdmax = (server_socket > signal_pipe[0]) ? server_socket : signal_pipe[0];
 //////
     printf("Pronto a ricevere connessioni!\n");
-    volatile long termina = 0;
+    int termina = 0;
     while(!termina){
         tmpset = set;
         if(select(fdmax+1,&tmpset,NULL,NULL,NULL) == -1){
@@ -173,22 +181,63 @@ void* manager_thread_function(void* args){
             }
             if (i == signal_pipe[0]) {
                 // ricevuto un segnale, esco ed inizio il protocollo di terminazione
+                pthread_mutex_lock(&mutex_pipe);
                 if(b = readn(signal_pipe[0],&sig,sizeof(int) == -1)){
                     perror("Errore readn pipe");
                     exit(EXIT_FAILURE);
                 }
+                pthread_mutex_unlock(&mutex_pipe); 
                 if(sig == SIGINT || sig == SIGQUIT){
+                    pthread_mutex_lock(&mutex);
+                    pthread_cond_broadcast(&cond_var);
+                    pthread_mutex_unlock(&mutex);
                     termina = 1;
                     break;
                 }
                 if(sig == SIGHUP){
-                    
-                    
+                    close(server_socket);  
+                    FD_CLR(server_socket,&set);
+                    if(isEmpty_q()){
+                        pthread_mutex_lock(&mutex);
+                        pthread_cond_broadcast(&cond_var);
+                        pthread_mutex_unlock(&mutex);
+                        termina = 1;
+                    }
                     break;
                 }
             }
         }
     }
+}
+
+static void *sigHandler(void *arg) {
+    sigset_t *set = (sigset_t*)arg;
+
+    while(1) {
+        int sig,b;
+        int r = sigwait(set, &sig);
+        if (r != 0) {
+            errno = r;
+            perror("FATAL ERROR 'sigwait'");
+            return NULL;
+        }
+
+        switch(sig) {
+        case SIGINT:
+        case SIGHUP:
+        case SIGQUIT:
+            pthread_mutex_lock(&mutex_pipe);
+            if(b = writen(signal_pipe[1],&sig,sizeof(int)) == -1){
+                perror("Errore writen pipe");
+                exit(EXIT_FAILURE);
+            }
+            pthread_mutex_unlock(&mutex_pipe);
+            close(signal_pipe[1]);  // notifico il listener thread della ricezione del segnale
+            return NULL;
+        default:  ; 
+        }
+    }
+    return NULL;	   
 }
 
 void* worker_thread_function(void* args){
@@ -649,7 +698,7 @@ void setUpServer(config *Server){
     FILE* conf;
     memset(buff,0,MAX_LENGHT_FILE);
     char* s;
-    if((conf = fopen("config.txt", "r"))  == NULL){
+    if((conf = fopen("./configs/config.txt", "r"))  == NULL){
         perror("Errore apertura file conf");
         exit(EXIT_FAILURE);
     }
@@ -683,18 +732,18 @@ void setUpServer(config *Server){
         perror("Errore lettura socket path");
         exit(EXIT_FAILURE);
     }
-    if((s = fgets(buff,NAME_MAX,conf)) != NULL ){
-        strncpy(Server->log_file_path, s, strlen(s));
-    }
-    else{
-        perror("Errore lettura log file path");
-        exit(EXIT_FAILURE);
-    }
+    
 
     fclose(conf);
     free(conf);
 }
+void print_serverConfig(){
+    printf("Numero di thread workers: %d\n",configurazione.n_thread_workers);
+    printf("Numero massimo di file nel server : %d\n",configurazione.max_n_file);
+    printf("Capacità di memoria del server (in MegaBytes) : %d\n",configurazione.memory_capacity);
+    printf("Nome del socket : %s\n",configurazione.socket_name);
 
+}
 void createFiles_inDir(char* dirname,list* l){
   //crea file nella directory dirname, dirname deve essere il path assoluto della directory
   //i file sono passati dalla list l
@@ -789,30 +838,3 @@ void init_Stats(stats* statistiche_operazioni){
 
 }
 
-static void *sigHandler(void *arg) {
-    sigset_t *set = (sigset_t*)arg;
-
-    for( ;; ) {
-        int sig,b;
-        int r = sigwait(set, &sig);
-        if (r != 0) {
-            errno = r;
-            perror("FATAL ERROR 'sigwait'");
-            return NULL;
-        }
-
-        switch(sig) {
-        case SIGINT:
-        case SIGHUP:
-        case SIGQUIT:
-            if(b = writen(signal_pipe[1],&sig,sizeof(int)) == -1){
-                perror("Errore writen pipe");
-                exit(EXIT_FAILURE);
-            }
-            close(signal_pipe[1]);  // notifico il listener thread della ricezione del segnale
-            return NULL;
-        default:  ; 
-        }
-    }
-    return NULL;	   
-}

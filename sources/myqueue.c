@@ -48,3 +48,6 @@ void rmv_q() {
 	return;
 }
 
+int isEmpty_q(){
+    return (head == NULL) ? 1 : 0;
+}

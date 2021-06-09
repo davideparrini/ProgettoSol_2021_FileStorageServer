@@ -8,6 +8,8 @@
 #include <time.h>
 #include <sys/stat.h>
 #include <string.h>
+
+#include <utils.h>
 #define NUMERO_PRIMO_ENORME 93199
 
 typedef struct node{
