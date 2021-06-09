@@ -4,29 +4,29 @@
 
 #define MAX_SOCKET_PATH 256
 
-extern config configurazione;
-extern int socket_c;
+
+char* socket_path;
 int flag_stamp_op = 0;
 int msec_between_req = 0;
 
-int arg_h(const char* s);
-int arg_f(const char* s,char* sockname);
-int arg_w(const char* s);
-int arg_W(const char* s);
-int arg_D(const char* s,char* temp_optarg);
-int arg_r(const char* s);
-int arg_R(int n);
-int arg_d(const char* s,char* temp_optarg);
+int arg_h(char* s);
+int arg_f(char* s,char* sockname);
+//int arg_w(char* s);
+//int arg_W(char* s);
+//int arg_D(char* s,char* temp_optarg);
+int arg_r(char* s);
+//int arg_R(int n);
+//int arg_d(char* s,char* temp_optarg);
 int arg_t(int mill_sec);
-int arg_l(const char* s);
-int arg_u(const char* s);
-int arg_c(const char* s);
+//int arg_l(char* s);
+//int arg_u(char* s);
+int arg_c(char* s);
 int arg_p();
 
 
-int main(int argc, char const *argv[]){
-    char* socket_name = malloc(sizeof(char)*MAX_SOCKET_PATH);
-    memset(socket_name,0,strlen(socket_name));
+int main(int argc, char *argv[]){
+    socket_path = malloc(sizeof(char)*MAX_SOCKET_PATH);
+    memset(socket_path,0,strlen(socket_path));
     
     struct timespec timer_connection;
     timer_connection.tv_nsec = 0;
@@ -38,16 +38,17 @@ int main(int argc, char const *argv[]){
         exit(EXIT_FAILURE);
     }
 
-    if(openConnection(configurazione.n_thread_workers,100,timer_connection) == -1){
+    if(openConnection(socket_path,100,timer_connection) == -1){
         perror("Non connesso, errore in openConnection");
         exit(EXIT_FAILURE);
     }
 
     char* temp_optarg = malloc(sizeof(char)*NAME_MAX);
     int opt, temp_opt = 0;
-    int r = 0,R = 0, w = 0, W = 0,f = 0, h = 0,p = 0,d = 0,D =0;
+    int r = 0,R = 0,f = 0, h = 0,p = 0;
 
-    while(opt = getopt(argc, argv,"hf:w:W:D:r:R:d:t:l:u:c:p") != -1){
+    while((opt = getopt(argc, argv,"hf:w:W:D:r:R:d:t:l:u:c:p")) != -1){
+        /*
         if(temp_opt != 0){
             switch (temp_opt){
 
@@ -74,6 +75,7 @@ int main(int argc, char const *argv[]){
             default: break;
             }
         }
+        */
         switch (opt){
         case 'h': 
             if(h){
@@ -88,16 +90,16 @@ int main(int argc, char const *argv[]){
                 printf("Non si può ripetere l'argomento 'f'!\n");
                 break;
             } 
-            arg_f(optarg,socket_name);
+            arg_f(optarg,socket_path);
             break;
 
         case 'w':   
-            memset(temp_optarg,0,sizeof(temp_optarg));
+            memset(temp_optarg,0,strlen(temp_optarg));
             strcpy(temp_optarg,optarg);
             break; 
 
         case 'W': 
-            memset(temp_optarg,0,sizeof(temp_optarg));
+            memset(temp_optarg,0,strlen(temp_optarg));
             strcpy(temp_optarg,optarg);
             break;
 
@@ -109,12 +111,12 @@ int main(int argc, char const *argv[]){
             break;
 
         case 'r':
-            memset(temp_optarg,0,sizeof(temp_optarg));
+            memset(temp_optarg,0,strlen(temp_optarg));
             strcpy(temp_optarg,optarg);
             break;
 
         case 'R':
-            memset(temp_optarg,0,sizeof(temp_optarg));
+            memset(temp_optarg,0,strlen(temp_optarg));
             strcpy(temp_optarg,optarg); 
             break;
 
@@ -130,11 +132,11 @@ int main(int argc, char const *argv[]){
             break;
 
         case 'l': 
-            arg_l(optarg);
+           // arg_l(optarg);
             break;
 
         case 'u': 
-            arg_u(optarg); 
+           // arg_u(optarg); 
             break;
 
         case 'c': 
@@ -152,7 +154,7 @@ int main(int argc, char const *argv[]){
         case ':': 
             if(optopt == 'R'){
                 int n = 0;
-                arg_R(n);
+               // arg_R(n);
                 break;
             }
             if(optopt == 't'){
@@ -173,7 +175,7 @@ int main(int argc, char const *argv[]){
         temp_opt = opt;
         msleep(msec_between_req);  
     }
-
+    /*
     switch(temp_opt){
 
     case 'r':
@@ -194,12 +196,13 @@ int main(int argc, char const *argv[]){
 
     default: break;            
     }
+    */
     msec_between_req = 0;
-    r = 0,R = 0, w = 0, W = 0,f = 0, h = 0,p = 0;
+    r = 0,R = 0,f = 0, h = 0,p = 0;
 
 
 
-    if(closeConnection(socket_c) == -1){
+    if(closeConnection(socket_path) == -1){
         fprintf(stderr, "closeConnection Value of errno : %d\n", errno);
     }
 
@@ -207,7 +210,7 @@ int main(int argc, char const *argv[]){
 
 
 
-int arg_h(const char* s){
+int arg_h(char* s){
     printf("Helper message!\n\nUsage: %s\n\n",s);
     printf("-f filename\tspecifica il nome del socket AF_UNIX a cui connettersi\n\n");
     printf("-w dirname[,n=0]\tinvia al server n (se non specificato o 0 invia tutti i file) file nella cartella ‘dirname’ a seguito di capacity misses. Può essere utilizzato solo in seguito ai comandi '-w' o '-W'\n\n");
@@ -226,16 +229,16 @@ int arg_h(const char* s){
 }
 
 
-int arg_f(const char* s,char *sockname){
+int arg_f(char* s,char *sockname){
     memset(sockname,0,MAX_SOCKET_PATH);
     strncpy(sockname,s,MAX_SOCKET_PATH);
     printf("Ora il socket su cui connettersi è : %s\n",sockname);
     return 0;
 }
 
-int arg_w(const char* s){
+int arg_w(char* s){
     char* dirname = malloc( sizeof(char) * NAME_MAX);
-    memset(dirname,0,sizeof(dirname));
+    memset(dirname,0,strlen(dirname));
     char* token = strtok(s,",");
     strncpy(dirname,token,NAME_MAX);
     token = strtok(NULL,"");
@@ -244,12 +247,10 @@ int arg_w(const char* s){
 
 
 
-
+    return 0;
 }
-int arg_W(const char* s);
-int arg_D(const char* s,char* temp_optarg);
 
-int arg_r(const char* s){
+int arg_r(char* s){
     char* token = strtok(s,",");
     char* buff;
     size_t size;
@@ -261,15 +262,15 @@ int arg_r(const char* s){
             return -1;
         }
     
-        if(res = readFile(token,&buff,&size) == -1){
+        if((res = readFile(token,(void**)&buff,&size)) == -1){
             perror("readFile arg_r");
             res = -1;
         }
-        pritnf("*Contenuto File:\n%s\n",buff);
+        printf("*Contenuto File:\n%s\n",buff);
 
         if(flag_stamp_op){
             time_t t_op = time(NULL);
-            PRINT_OP(readFile,token,res,&t_op,size);
+            PRINT_OP("readFile",token,&t_op,res,size);
         } 
         if(closeFile(token) == -1){
             perror("closeFile arg_r");
@@ -283,17 +284,14 @@ int arg_r(const char* s){
     return res;
 }
 
-int arg_R(int n);
-int arg_d(const char* s,char* temp_optarg);
+
 
 int arg_t(int mill_sec){
     msec_between_req = mill_sec;
     return 0;
 }
 
-int arg_l(const char* s);
-int arg_u(const char* s);
-int arg_c(const char* s){
+int arg_c(char* s){
     int res = 0;
     char* token = strtok(s,",");
     while(token != NULL){
@@ -303,7 +301,7 @@ int arg_c(const char* s){
         }
         if(flag_stamp_op){
             time_t t_op = time(NULL);
-            PRINT_OP(removeFile,token,res,&t_op,0);
+            PRINT_OP("removeFile",token,&t_op,res,0);
         } 
         token = strtok(NULL,",");
     }

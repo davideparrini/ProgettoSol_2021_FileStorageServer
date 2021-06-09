@@ -1,20 +1,6 @@
 #ifndef SERVERAPI_H_
 #define SERVERAPI_H_
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <time.h>
-#include <sys/socket.h>
-#include <pthread.h>
-#include <unistd.h>
-#include <sys/un.h>
-#include <sys/select.h>
-#include <limits.h>
-#include <time.h>
 #include <utils.h>
 
 

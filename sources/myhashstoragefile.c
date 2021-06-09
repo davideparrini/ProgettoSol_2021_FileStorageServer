@@ -155,7 +155,7 @@ void extract_file(list* cell,file_t* file){
 void extract_file_to_server(hashtable *table,file_t* file){
 	
 	if(file->inCache_flag){
-		extract_file(&table->cache,file);
+		extract_file(table->cache,file);
     }
 	else{	
 		int h = hash(*table,file->abs_path);
@@ -182,13 +182,14 @@ void update_file(hashtable *table,file_t* file){
 		file->modified_flag = 1;
 	}
     if(file->inCache_flag){
-		extract_file(&table->cache,file);
-		ins_head_list(&table->cache,file);
+		extract_file(table->cache,file);
+		ins_head_list(
+			table->cache,file);
 	}
 	else{
 		int h;
 		if(isCacheFull){
-			file_t *f = pop_list(&table->cache);
+			file_t *f = pop_list(table->cache);
 			f->inCache_flag = 0;
 			table->cache->dim_bytes -= f->dim_bytes;
 			h = hash(*table,f->abs_path);
@@ -207,11 +208,11 @@ file_t* research_file(hashtable table,char *namefile){
 	MY_REALPATH(research_file,namefile,abs_path);
 	int h = hash(table,abs_path);
 	file_t* f;
-	if(f = research_file_list(table.cell[h],abs_path) != NULL){
+	if((f = research_file_list(table.cell[h],abs_path)) != NULL){
 		return f;
 	}
 	else{
-		if(f = research_file_list(*table.cache,abs_path) != NULL){
+		if((f = research_file_list(*table.cache,abs_path)) != NULL){
 			return f;
 		}
 	}
@@ -223,7 +224,7 @@ file_t* research_file_list(list cell,char* namefile){
 	list temp = cell;
 	while(temp.head != NULL){
 		if(!strncmp(temp.head->abs_path,namefile,strlen(namefile))){
-			f = &temp.head;
+			f = temp.head;
 			return f;
 		}
 		else temp.head = temp.head->next;
@@ -250,14 +251,14 @@ int modifying_file(hashtable* table,file_t* f,size_t size_inplus,list* list_reje
 				dupFile_t* to_reject;
 				dupFile_list* temp_reject;
 				init_dupFile_list(temp_reject);
-				long somma_bytes; //somma bytes della list_reject
+				unsigned long somma_bytes; //somma bytes della list_reject
 
 				while(!stop && max_files_toVisite > 0 && h < table->len){
-					list* temp = table->cell[h].head;
-					while(temp->head != NULL){
+					list temp = table->cell[h];
+					while(temp.head != NULL){
 						max_files_toVisite--;
-						if(temp->head->modified_flag == 1){
-							to_reject = init_dupFile(temp->head);
+						if(temp.head->modified_flag == 1){
+							to_reject = init_dupFile(temp.head);
 							somma_bytes += to_reject->riferimento_file->dim_bytes;
 							ins_head_dupFilelist(temp_reject,to_reject);
 							if((table->memory_capacity >= table->memory_used - somma_bytes + size_inplus) ){
@@ -265,9 +266,8 @@ int modifying_file(hashtable* table,file_t* f,size_t size_inplus,list* list_reje
 								break;
 							}  
 						}
-						temp->head = temp->head->next;
+						temp.head = temp.head->next;
 					}
-					free(temp);
 					h++;
 				}
 				if(!stop && max_files_toVisite == 0){
@@ -278,7 +278,7 @@ int modifying_file(hashtable* table,file_t* f,size_t size_inplus,list* list_reje
 					}
 					else{ 
 						while(table->memory_capacity > table->memory_used + size_inplus){
-							file_t* to_reject = pop_list(&table->cache);
+							file_t* to_reject = pop_list(table->cache);
 							if(to_reject->opened_flag == 1 && to_reject->locked_flag == 0) table->n_files_free--;
 							table->n_file--;
 							table->n_file_modified--;
@@ -300,7 +300,7 @@ int modifying_file(hashtable* table,file_t* f,size_t size_inplus,list* list_reje
 					return 0; 
 				}
 				while(table->memory_capacity > table->memory_used + f->dim_bytes){
-					file_t* to_reject = pop_list(&table->cache);
+					file_t* to_reject = pop_list(table->cache);
 					table->n_file--;
 					table->n_file_modified--;
 					ins_tail_list(list_reject,to_reject);
@@ -319,9 +319,7 @@ int modifying_file(hashtable* table,file_t* f,size_t size_inplus,list* list_reje
 }
 
 
-int ins_file_server(hashtable* table, char* namefile,list* list_reject){
-
-	file_t *f = init_file(namefile);
+int ins_file_server(hashtable* table, file_t *f,list* list_reject){
 
     if(table->n_file < table->max_n_file && (table->memory_used + f->dim_bytes) <= table->memory_capacity){
         ins_file_hashtable(table,f);
@@ -346,13 +344,13 @@ int ins_file_server(hashtable* table, char* namefile,list* list_reject){
 					dupFile_t* to_reject;
 					dupFile_list* temp_reject;
 					init_dupFile_list(temp_reject);
-                    long somma_bytes; //somma bytes della list_reject
+                    unsigned long somma_bytes; //somma bytes della list_reject
                     while(!stop && max_files_toVisite > 0 && h < table->len){
-                        list* temp = table->cell[h].head;
-                        while(temp->head != NULL){
+                        list temp = table->cell[h];
+                        while(temp.head != NULL){
 							max_files_toVisite--;
-                            if(temp->head->modified_flag == 1){
-                                to_reject = init_dupFile(temp->head);
+                            if(temp.head->modified_flag == 1){
+                                to_reject = init_dupFile(temp.head);
                                 somma_bytes += to_reject->riferimento_file->dim_bytes;
                                 ins_head_dupFilelist(temp_reject,to_reject);
                                 if(table->memory_capacity >= (table->memory_used - somma_bytes + f->dim_bytes) ){
@@ -360,10 +358,9 @@ int ins_file_server(hashtable* table, char* namefile,list* list_reject){
                                     break;
                                 }  
                             }
-                            temp->head = temp->head->next;
+                            temp.head = temp.head->next;
                         }
                         h++;
-						free(temp);
                     }
 					if(!stop && max_files_toVisite  == 0 ){
 						if(f->dim_bytes > table->cache->dim_bytes + somma_bytes){
@@ -373,7 +370,7 @@ int ins_file_server(hashtable* table, char* namefile,list* list_reject){
 							return 0;
 						}
 						while(table->memory_capacity > table->memory_used + f->dim_bytes){
-							file_t* to_reject = pop_list(&table->cache);
+							file_t* to_reject = pop_list(table->cache);
 							table->memory_used -= to_reject->dim_bytes;
 							table->memory_used_from_modified_files -= to_reject->dim_bytes;
 							table->n_file--;
@@ -392,7 +389,7 @@ int ins_file_server(hashtable* table, char* namefile,list* list_reject){
                 else{
 					if(table->cache->dim_bytes >= f->dim_bytes){
 						while(table->memory_capacity > table->memory_used + f->dim_bytes){
-							file_t* to_reject = pop_list(&table->cache);
+							file_t* to_reject = pop_list(table->cache);
 							if(to_reject->opened_flag == 1 && to_reject->locked_flag == 0) table->n_files_free--;
 							table->memory_used -= to_reject->dim_bytes;
 							table->memory_used_from_modified_files -= to_reject->dim_bytes;
@@ -412,25 +409,24 @@ int ins_file_server(hashtable* table, char* namefile,list* list_reject){
                     //lavoro solo sui posti
 					//ricerca file da rimpiazzare
 					int find = 0,h = 0;
-					int h = 0;
 					file_t* to_reject;
 					while(!find && h < table->len){
-						list* temp = table->cell[h].head;
-						while(temp->head != NULL){
-							if(temp->head->modified_flag == 1){
-								to_reject = temp->head;
+						list temp = table->cell[h];
+						while(temp.head != NULL){
+							if(temp.head->modified_flag == 1){
+								to_reject = temp.head;
 								find=1;
 								break;
 							}
-							temp->head = temp->head->next;
+							temp.head = temp.head->next;
 						}
 						h++;
 					}
 					if(!find){
-						to_reject = pop_list(&table->cache);
+						to_reject = pop_list(table->cache);
 						if(to_reject->opened_flag == 1 && to_reject->locked_flag == 0) table->n_files_free--;
 					}
-					else extract_file(table->cell[h].head, to_reject);
+					else extract_file(&table->cell[h], to_reject);
 					table->memory_used -= to_reject->dim_bytes;
 					table->memory_used_from_modified_files -= to_reject->dim_bytes;
 					table->n_file_modified--;
@@ -571,7 +567,7 @@ void ins_dupList_to_list(hashtable* table, list* l, dupFile_list* dl){
 	while(dl->head != NULL){
 		dupFile_t* temp = dl->head;
 		extract_file_to_server(table,dl->head->riferimento_file);
-		ins_head_tail(l,dl->head->riferimento_file);
+		ins_tail_list(l,dl->head->riferimento_file);
 		dl->head = dl->head->next;
 		dl->size--;
 		free(temp);

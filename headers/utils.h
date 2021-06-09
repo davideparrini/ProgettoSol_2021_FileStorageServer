@@ -14,14 +14,14 @@
 #include <sys/un.h>
 #include <sys/select.h>
 #include <limits.h>
+#include <ctype.h>
 #include <signal.h>
 #include <libgen.h>
+#include <getopt.h>
 
-#include <myqueue.h>
-#include <utils.h>
 #include <request.h>
 #include <response.h>
-#include <myhashstoragefile.h>
+
 
 #if !defined(NAME_MAX)
 #define NAME_MAX 1000
@@ -40,13 +40,14 @@
 #define O_NOFLAGS 2
 #endif
 
+#define _POSIX_C_SOURCE 2001112L
 
 typedef struct sockaddr_un SA;
 
 typedef struct S{
     int n_thread_workers;
     int max_n_file;
-    int memory_capacity;
+    double memory_capacity;
     char socket_name[NAME_MAX];
 }config;
 
@@ -84,7 +85,7 @@ typedef struct S{
 #define PRINT_OP(nome_operazione,file_riferimento,orario,esito,bytes) \
     printf("Tipo operazione :%s\nSul file: %s\nOre: %s\nEsito: ",nome_operazione,file_riferimento,ctime(orario) );\
     if(!esito){ \
-        pritnf("Successo!\n"); \
+        printf("Successo!\n"); \
         if(bytes != 0) printf("bytes letti/scritti : %lu\n",bytes);        \
     }           \
     else printf("Fallimento!\n")
@@ -126,6 +127,8 @@ int msleep(unsigned int tms);
 int isNumber(const char* s, long* n);
 int isdot(const char dir[]);
 
-long bytesToMb(long bytes);
-long MbToBytes(long Mb);
+double bytesToKb(long bytes);
+double bytesToMb(long bytes);
+unsigned long KbToBytes(double Kb);
+unsigned long MbToBytes(double Mb);
 #endif 

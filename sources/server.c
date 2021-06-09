@@ -23,16 +23,18 @@ pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_file = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_pipe = PTHREAD_MUTEX_INITIALIZER;
 
+char configFile_path[NAME_MAX];
 config configurazione;
-hashtable storage;
-list files_rejected;
-stats stats_op;
+static hashtable storage;
+static list files_rejected;
+static stats stats_op;
 int signal_pipe[2];
 
 void cleanup();
-
+void setConfigFile(char* s);
 void setUpServer(config* Server);
 void print_serverConfig();
+static void *sigHandler(void *arg);
 void* worker_thread_function(void* args);
 void* manager_thread_function(void* args);
 void handle_connection(int *pclient_socket);
@@ -50,8 +52,12 @@ void createFiles_inDir(char* dirname,list* l);
 void createFiles_fromDupList_inDir(char* dirname,dupFile_list* l);
 void init_Stats();
 
-int main(){
-
+int main(int argc, char *argv[]){
+    if(argc != 2){
+        printf("Argomenti non validi!\nDevi passare il config file!\n");
+        exit(EXIT_FAILURE);
+    }
+    setConfigFile(argv[1]);
     setUpServer(&configurazione);
     print_serverConfig();
     init_hash(&storage,configurazione);
@@ -74,7 +80,7 @@ int main(){
         goto _exit;
     }
    
-    if (pipe(signal_pipe)==-1) {
+    if ((pipe(signal_pipe))==-1) {
 	    perror("pipe");
         goto _exit;
     }
@@ -96,12 +102,12 @@ int main(){
         }
     }
 
-    if(pthread_join(&thread_manager,NULL) != 0){
+    if(pthread_join(thread_manager,NULL) != 0){
         perror("Errore join thread_manager");
         goto _exit;
     }
     for(size_t i = 0; i < configurazione.n_thread_workers;i++){
-        if(pthread_join(&thread_workers[i],NULL) != 0){
+        if(pthread_join(thread_workers[i],NULL) != 0){
             perror("Errore join thread_workers");
             goto _exit;
         }
@@ -129,9 +135,10 @@ void* manager_thread_function(void* args){
     cleanup();
     atexit(cleanup);
     int server_socket, client_socket,b, sig;
-    SA serv_addr;
+    SA serv_addr,client_addr;
+    socklen_t client_addr_length = sizeof(client_addr);
 
-    if(server_socket = socket(AF_UNIX, SOCK_STREAM, 0) == -1){
+    if((server_socket = socket(AF_UNIX, SOCK_STREAM, 0)) == -1){
         perror("Errore Creazione socket_s");
         exit(EXIT_FAILURE);
     }
@@ -168,7 +175,7 @@ void* manager_thread_function(void* args){
         for(int i = 0;i <= fdmax;i++){
             if(FD_ISSET(i,&tmpset)){
                 if(i == server_socket){
-                    if(client_socket = accept(server_socket,(struct sockaddr*)&client_socket, sizeof(client_socket)) == -1){
+                    if((client_socket = accept(server_socket,(struct sockaddr*)&client_addr, &client_addr_length)) == -1){
                         perror("Errore Accept socket_s");
                         exit(EXIT_FAILURE);
                     }
@@ -182,7 +189,7 @@ void* manager_thread_function(void* args){
             if (i == signal_pipe[0]) {
                 // ricevuto un segnale, esco ed inizio il protocollo di terminazione
                 pthread_mutex_lock(&mutex_pipe);
-                if(b = readn(signal_pipe[0],&sig,sizeof(int) == -1)){
+                if((b = readn(signal_pipe[0],&sig,sizeof(int)) == -1)){
                     perror("Errore readn pipe");
                     exit(EXIT_FAILURE);
                 }
@@ -208,6 +215,7 @@ void* manager_thread_function(void* args){
             }
         }
     }
+    return NULL;
 }
 
 static void *sigHandler(void *arg) {
@@ -227,7 +235,7 @@ static void *sigHandler(void *arg) {
         case SIGHUP:
         case SIGQUIT:
             pthread_mutex_lock(&mutex_pipe);
-            if(b = writen(signal_pipe[1],&sig,sizeof(int)) == -1){
+            if((b = writen(signal_pipe[1],&sig,sizeof(int))) == -1){
                 perror("Errore writen pipe");
                 exit(EXIT_FAILURE);
             }
@@ -262,7 +270,7 @@ void handle_connection(int *pclient_socket){
     memset(&r_from_client, 0, sizeof(request));
     readn(client_socket, &r_from_client, sizeof(request)); 
 
-    if(do_task(&r_from_client,client_socket)){
+    if(do_task(&r_from_client,&client_socket)){
         close(client_socket);
         return ;
     } 
@@ -287,26 +295,26 @@ int do_task(request* r_from_client,int* client_s){
         }    
         break;
     case READ_FILE:
-        if(task_readFile(r_from_client,&feedback)){
+        if(task_read_file(r_from_client,&feedback)){
             res = 1;
             stats_op.n_readfile++;
         } 
         break;
 
     case READ_N_FILE:
-        if(task_read_N_File(r_from_client,&feedback)){
+        if(task_read_N_file(r_from_client,&feedback)){
             res = 1;
             stats_op.n_readNfile++;
         }  
         break;
     case WRITE_FILE:
-        if(task_writeFile(r_from_client,&feedback)){
+        if(task_write_file(r_from_client,&feedback,&flag_open_lock)){
             res = 1;
             stats_op.n_writefile++;
         }  
         break;
     case APPEND_FILE:
-        if(task_appendFile(r_from_client,&feedback)){
+        if(task_append_file(r_from_client,&feedback)){
             res = 1;
             stats_op.n_appendfile++;
         }  
@@ -346,7 +354,7 @@ int do_task(request* r_from_client,int* client_s){
 
     }  
     PRINT_ERRNO(r_from_client->type,errno);
-    if(b = writen(client_s,&feedback,sizeof(feedback)) == -1){
+    if((b = writen(*client_s,&feedback,sizeof(feedback))) == -1){
         errno = EAGAIN;
         return 0;
     }
@@ -408,7 +416,7 @@ int task_openFile(request* r, response* feedback, int* flag_open_lock,int* flag_
     }
     
 
-    if(b = writen(r->socket_fd,&feedback,sizeof(feedback)) == -1){
+    if((b = writen(r->socket_fd,&feedback,sizeof(feedback))) == -1){
         errno = EAGAIN;
     }
     return  res;
@@ -436,13 +444,13 @@ int task_read_file(request* r, response* feedback){
         if((to_read = fopen(r->file_name,"r")) == NULL){
             perror("Errore apertura file in task_read_file");
         }
-        while(s = fgets(feedback->content,MAX_LENGHT_FILE,to_read) != NULL);
+        while((s = fgets(feedback->content,MAX_LENGHT_FILE,to_read)) != NULL);
         fclose(to_read);
         free(to_read);
     }
 
     finetask:
-    if(b = writen(r->socket_fd,&feedback,sizeof(feedback)) == -1){
+    if((b = writen(r->socket_fd,&feedback,sizeof(feedback))) == -1){
         errno = EAGAIN;
     }
     return res;
@@ -454,7 +462,7 @@ int task_read_N_file(request* r, response* feedback){
     if(r->c <= 0 || r->c >= storage.n_files_free) n_to_read = storage.n_files_free;
     else n_to_read = r->c;
 
-    if(b = writen(r->socket_fd,&n_to_read,sizeof(int)) == -1){
+    if((b = writen(r->socket_fd,&n_to_read,sizeof(int))) == -1){
         errno = EAGAIN;
     }
     size_t h = 0;
@@ -470,14 +478,14 @@ int task_read_N_file(request* r, response* feedback){
                     dupFile_t* df = init_dupFile(temp.head);
                     ins_head_dupFilelist(&d_list,df);
                     FILE* f;
-                    if(f = fopen(temp.head->abs_path,"r") == NULL){
+                    if((f = fopen(temp.head->abs_path,"r")) == NULL){
                         perror("Errore apertura file in readNfile");
                         feedback->type = READ_N_FILE_FAILURE;
                         goto finetask;
                     }
                     char* s;
-                    while(s = fgets(buff,MAX_LENGHT_FILE,f) != NULL);
-                    if(b = writen(r->socket_fd,buff,sizeof(buff)) == -1){
+                    while((s = fgets(buff,MAX_LENGHT_FILE,f)) != NULL);
+                    if((b = writen(r->socket_fd,buff,sizeof(buff))) == -1){
                         errno = EAGAIN;
                     }
                     contatore_file_letti++;
@@ -507,7 +515,7 @@ int task_read_N_file(request* r, response* feedback){
 
 finetask:
     free_duplist(&d_list);
-    if(b = writen(r->socket_fd,&feedback,sizeof(feedback)) == -1){
+    if((b = writen(r->socket_fd,&feedback,sizeof(feedback))) == -1){
         errno = EAGAIN;
     }
     return res;
@@ -520,7 +528,8 @@ int task_write_file(request* r, response* feedback,int* flag_open_lock){
     }
     else{
         list removed_files;
-        if(ins_file_server(&storage,r->file_name,&removed_files)){
+        file_t* f;
+        if(ins_file_server(&storage,f,&removed_files)){
             feedback->type = WRITE_FILE_SUCCESS;
             res = 1;
             if(r->dirname != NULL){
@@ -531,7 +540,7 @@ int task_write_file(request* r, response* feedback,int* flag_open_lock){
         else feedback->type = NO_SPACE_IN_SERVER;    
     }
 
-    if(b = writen(r->socket_fd,&feedback,sizeof(feedback)) == -1){
+    if((b = writen(r->socket_fd,&feedback,sizeof(feedback))) == -1){
         errno = EAGAIN;
     }
     return res;
@@ -557,7 +566,7 @@ int task_append_file(request* r, response* feedback){
         pthread_mutex_lock(&mutex_file);
         if(modifying_file(&storage,file,r->request_size,&files_rejected)){
             FILE* f;
-            if(f = fopen(r->file_name,"a") == NULL){
+            if((f = fopen(r->file_name,"a")) == NULL){
                 perror("Errore apertura appendfile");
             }
             fputs(r->buff,f);
@@ -573,7 +582,7 @@ int task_append_file(request* r, response* feedback){
     }
 
 finetask:
-    if(b = writen(r->socket_fd,&feedback,sizeof(feedback)) == -1){
+    if((b = writen(r->socket_fd,&feedback,sizeof(feedback))) == -1){
         errno = EAGAIN;
     }
     return res;
@@ -581,9 +590,11 @@ finetask:
 
 int task_unlock_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
+    return 0;
 }
 int task_lock_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
+    return 0;
 }
 
 int task_close_file(request* r, response* feedback){
@@ -604,7 +615,7 @@ int task_close_file(request* r, response* feedback){
     }
 
 finetask:
-    if(b = writen(r->socket_fd,&feedback,sizeof(feedback)) == -1){
+    if((b = writen(r->socket_fd,&feedback,sizeof(feedback))) == -1){
         errno = EAGAIN;
     }
     return res;
@@ -632,7 +643,7 @@ int task_remove_file(request* r, response* feedback){
     }
 
     finetask:
-    if(b = writen(r->socket_fd,&feedback,sizeof(feedback)) == -1){
+    if((b = writen(r->socket_fd,&feedback,sizeof(feedback))) == -1){
         errno = EAGAIN;
     }
     return res;
@@ -643,13 +654,13 @@ int task_remove_file(request* r, response* feedback){
 void create_FileLog(){
     
     FILE *f;
-    if(f= fopen(FILELOG,"a") == NULL){
+    if((f= fopen(FILELOG,"a")) == NULL){
         perror("Errore creazione filelog");
     }
     fprintf(f,"Numero di file attualmente nel server : %d\n",storage.n_file);
     fprintf(f,"Numero di file massimo memorizzato nel server : %d\n",storage.stat_max_n_file);
-    fprintf(f,"Memoria attualmente utilizzata in Mbytes nel file storage : %lu\n",bytesToMb(storage.memory_used));
-    fprintf(f,"Dimensione massima in Mbytes raggiunta dal file storage : %lu\n",storage.stat_dim_file);
+    fprintf(f,"Memoria attualmente utilizzata in Mbytes nel file storage : %.3lf\n",bytesToMb(storage.memory_used));
+    fprintf(f,"Dimensione massima in Kbytes raggiunta dal file storage : %.2lf\n",bytesToKb(storage.stat_dim_file));
     fprintf(f,"Numero di volte in cui l’algoritmo di rimpiazzamento della cache è stato eseguito per selezionare uno o più \
     file “vittima” : %d\n",storage.stat_n_replacing_algoritm); 
 
@@ -692,13 +703,20 @@ void create_FileLog(){
     fclose(f);
 }
 
-
+void setConfigFile(char * s){
+    memset(&configFile_path,0,sizeof(configFile_path));
+    if(s != NULL) strcpy(configFile_path,s);
+    else{
+        fprintf(stderr,"Errore passaggio config_path\n");
+        exit(EXIT_FAILURE);
+    }
+}
 void setUpServer(config *Server){
     char buff[NAME_MAX];
     FILE* conf;
     memset(buff,0,MAX_LENGHT_FILE);
     char* s;
-    if((conf = fopen("./configs/config.txt", "r"))  == NULL){
+    if((conf = fopen(configFile_path, "r"))  == NULL){
         perror("Errore apertura file conf");
         exit(EXIT_FAILURE);
     }
@@ -719,7 +737,7 @@ void setUpServer(config *Server){
         exit(EXIT_FAILURE);
     }
     if((s = fgets(buff,NAME_MAX,conf) ) != NULL ){
-        Server->memory_capacity = atoi(s);
+        Server->memory_capacity = atof(s);
     }
     else{
         perror("Errore lettura memory capacity");
@@ -740,7 +758,7 @@ void setUpServer(config *Server){
 void print_serverConfig(){
     printf("Numero di thread workers: %d\n",configurazione.n_thread_workers);
     printf("Numero massimo di file nel server : %d\n",configurazione.max_n_file);
-    printf("Capacità di memoria del server (in MegaBytes) : %d\n",configurazione.memory_capacity);
+    printf("Capacità di memoria del server (in MegaBytes) : %.2lf\n",configurazione.memory_capacity);
     printf("Nome del socket : %s\n",configurazione.socket_name);
 
 }
@@ -759,11 +777,11 @@ void createFiles_inDir(char* dirname,list* l){
     char* content = malloc(sizeof(char)*MAX_LENGHT_FILE);
     FILE *new, *to_read;
 
-    if(new = fopen(newfile_path,"a") == NULL){
+    if((new = fopen(newfile_path,"a")) == NULL){
       perror("Errore apertura in createFiles_dir");
     }
 
-    if(to_read = fopen(l->head->abs_path,"r") == NULL){
+    if((to_read = fopen(l->head->abs_path,"r")) == NULL){
       perror("Errore apertura in createFiles_dir");
     }
 
@@ -799,11 +817,11 @@ void createFiles_fromDupList_inDir(char* dirname,dupFile_list* l){
     char* content = malloc(sizeof(char)*MAX_LENGHT_FILE);
     FILE *new, *to_read;
 
-    if(new = fopen(newfile_path,"a") == NULL){
+    if((new = fopen(newfile_path,"a")) == NULL){
       perror("Errore apertura in createFiles_fromDupList_inDir");
     }
 
-    if(to_read = fopen(l->head->riferimento_file->abs_path,"r") == NULL){
+    if((to_read = fopen(l->head->riferimento_file->abs_path,"r")) == NULL){
       perror("Errore apertura in createFiles_fromDupList_inDir");
     }
 

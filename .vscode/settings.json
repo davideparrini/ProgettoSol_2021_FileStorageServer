@@ -11,7 +11,10 @@
         "myhashstoragefile.h": "c",
         "fstream": "c",
         "select.h": "c",
-        "serverapi.h": "c"
+        "serverapi.h": "c",
+        "uio.h": "c",
+        "signal.h": "c",
+        "ctype.h": "c"
     },
     "C_Cpp.dimInactiveRegions": false
 }

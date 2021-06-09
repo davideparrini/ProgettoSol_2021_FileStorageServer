@@ -18,8 +18,7 @@
 #include <request.h>
 #include <response.h>
 
-extern config configurazione;
-
+extern char* socket_path;
 int socket_c;
 
 
@@ -37,7 +36,7 @@ int openConnection(const char* sockname, int msec, const struct timespec abstime
     time_t diff = 0;
     int tentativi = 0;
     while(abstime.tv_sec > diff){
-        if( connect(socket_c,(SA*) &sockaddr,sizeof(sockaddr)) != -1){
+        if( connect(socket_c,(SA*)&sockaddr,sizeof(sockaddr)) != -1){
             printf("Connesso al server!\n");
             return 0;
         }
@@ -62,7 +61,7 @@ int openConnection(const char* sockname, int msec, const struct timespec abstime
 
 
 int closeConnection(const char* sockname){
-    if(!strcmp(configurazione.socket_name, sockname)){
+    if(!strcmp(socket_path, sockname)){
         errno = EBADF;
         return -1;
     }

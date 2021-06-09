@@ -1,8 +1,8 @@
-#include <myqueue.h>
+#include "myqueue.h"
 #include <stdlib.h>
 //queue for request
-node_t *head = NULL;
-node_t *tail = NULL;
+static node_t *head = NULL;
+static node_t *tail = NULL;
 
 
 void init_q(int* client_socket){

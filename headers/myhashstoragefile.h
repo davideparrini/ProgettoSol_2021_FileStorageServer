@@ -2,14 +2,8 @@
 #define MYHASHSTORAGEFILE_H_
 
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <time.h>
-#include <sys/stat.h>
-#include <string.h>
+#include "utils.h"
 
-#include <utils.h>
 #define NUMERO_PRIMO_ENORME 93199
 
 typedef struct node{
@@ -26,9 +20,9 @@ typedef struct node{
 }file_t;
 //struttura per mantenere il riferimento al file vero e proprio, 
 //avendo comunque la possibilità di metterlo in una struttura dati secondaria
-typedef struct f{
+typedef struct dupf{
 	file_t* riferimento_file;
-	struct f *next;
+	struct dupf *next;
 }dupFile_t;
 
 typedef struct temp_list{
@@ -81,7 +75,7 @@ file_t* pop_list(list *cell);
 void ins_file_cache(hashtable *table,file_t* file); 
 void ins_file_hashtable(hashtable *table, file_t* file);
 //ins e rimozione file server seguendo politica lru
-int ins_file_server(hashtable* storage, char* namefile,list* list_reject);
+int ins_file_server(hashtable* storage, file_t *f,list* list_reject);
 file_t* remove_file_server(hashtable* table, file_t* f);
 //estrazione di file
 void extract_file_to_server(hashtable *table,file_t* file);

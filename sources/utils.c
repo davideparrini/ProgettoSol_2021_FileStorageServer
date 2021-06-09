@@ -1,4 +1,4 @@
-#include "utils.h"
+#include <utils.h>
 
 
 int isdot(const char dir[]) {
@@ -24,14 +24,18 @@ int isNumber(const char* s, long* n){
   return 1;   // non e' un numero
 }
 
-long bytesToMb(long bytes){
-    return bytes/1048576;
+double bytesToMb(long bytes){
+    return (double) bytes/1048576;
 }
-
-long MbToBytes(long Mb){
-  return Mb*1048576;
+double bytesToKb(long bytes){
+    return (double) bytes/1024;
 }
-
+unsigned long MbToBytes(double Mb){
+  return (unsigned long) Mb*1048576;
+}
+unsigned long KbToBytes(double Kb){
+  return (unsigned long) Kb*1024;
+}
 int msleep(unsigned int tms) {
   return usleep(tms * 1000);
 }
