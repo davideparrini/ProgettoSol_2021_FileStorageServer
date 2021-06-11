@@ -181,38 +181,37 @@ void setUpServer(config *Server){
     char buff[NAME_MAX];
     FILE* conf;
     memset(buff,0,NAME_MAX );
-    char* s;
     if((conf = fopen(configFile_path, "r"))  == NULL){
         perror("Errore apertura file conf");
         exit(EXIT_FAILURE);
     }
     
-    if((s = fgets(buff,NAME_MAX,conf)) != NULL ){
-        Server->n_thread_workers = atoi(s);
+    if(fgets(buff,NAME_MAX,conf) != NULL ){
+        Server->n_thread_workers = atoi(buff);
     }
     else{
         perror("Errore lettura N thread workers");
         exit(EXIT_FAILURE);
     }
     
-    if((s = fgets(buff,NAME_MAX,conf) ) != NULL ){
-        Server->max_n_file = atoi(s);
+    if(fgets(buff,NAME_MAX,conf) != NULL ){
+        Server->max_n_file = atoi(buff);
     }
     else{
         perror("Errore lettura max n file");
         exit(EXIT_FAILURE);
     }
 
-    if((s = fgets(buff,NAME_MAX,conf) ) != NULL ){
-        Server->memory_capacity = atof(s);
+    if(fgets(buff,NAME_MAX,conf) != NULL ){
+        Server->memory_capacity = atof(buff);
     }
     else{
         perror("Errore lettura memory capacity");
         exit(EXIT_FAILURE);
     }
 
-    if((s = fgets(buff,NAME_MAX,conf)) != NULL ){
-        strncpy(Server->socket_name, s, strlen(s));
+    if(fgets(buff,NAME_MAX,conf) != NULL ){
+        strcpy(Server->socket_name, buff);
     }
     else{
         perror("Errore lettura socket path");
@@ -508,11 +507,17 @@ int task_openFile(request* r, response* feedback){
             f->o_create_flag = 1;
             if(!ins_file_server(&storage,f,&files_rejected)){
                 feedback->type = NO_SPACE_IN_SERVER;
+                free(f);
             }
             else{
                 feedback->type =  O_CREATE_SUCCESS;
                 storage.n_files_free++;
                 res = 1;
+                if((f->fd = open(f->abs_path, O_RDWR)) == -1){
+                    perror("Errore open in task_open");
+                    res = 0;
+                }
+                if(!res) feedback->type = GENERIC_ERROR;
             }
         }
         else{
@@ -522,6 +527,52 @@ int task_openFile(request* r, response* feedback){
         break;
     
     case O_LOCK :
+        if(f == NULL)  feedback->type = O_CREATE_NOT_SPECIFIED_AND_FILE_NEXIST;
+        else{
+            if(f->locked_flag == 1) feedback->type = CANNOT_ACCESS_FILE_LOCKED;
+            else{
+                if(f->opened_flag != 1){
+                    f->opened_flag = 1;
+                    storage.n_files_free++;
+                    feedback->type = O_LOCK_SUCCESS;
+                    res = 1;
+                    if((f->fd = open(f->abs_path, O_RDWR)) == -1){
+                        perror("Errore open in task_open");
+                        res = 0;
+                    }
+                    if(!res) feedback->type = GENERIC_ERROR;
+                }
+                else{
+                    feedback->type = FILE_ALREADY_OPENED;
+                    res = 1;
+                }
+                
+            }
+        }
+        break;
+
+    case O_CREATE|O_LOCK :
+        if(f == NULL){
+            f = init_file(r->file_name);
+            f->opened_flag = 1;
+            f->o_create_flag = 1;
+            f->locked_flag = 1;
+            if(!ins_file_server(&storage,f,&files_rejected)){
+                feedback->type = NO_SPACE_IN_SERVER;
+                free(f);
+            }
+            else{
+                feedback->type =  O_CREATE_LOCK_SUCCESS;
+                storage.n_files_free++;
+                res = 1;
+                if((f->fd = open(f->abs_path, O_RDWR)) == -1){
+                    perror("Errore open in task_open");
+                    res = 0;
+                }
+                if(!res) feedback->type = GENERIC_ERROR;
+            }
+        }
+    
         break;
 
     case O_NOFLAGS :
@@ -531,9 +582,13 @@ int task_openFile(request* r, response* feedback){
             else{
                 if(f->opened_flag != 1){
                     f->opened_flag = 1;
-                    storage.n_files_free++;
-                    feedback->type = OPEN_FILE_SUCCESS;
+                    storage.n_files_free++;  
                     res = 1;
+                    if((f->fd = open(f->abs_path, O_RDWR)) == -1){
+                        perror("Errore open in task_open");
+                        res = 0;
+                    }
+                    if(!res) feedback->type = GENERIC_ERROR;
                 }
                 else{
                     feedback->type = FILE_ALREADY_OPENED;
@@ -745,7 +800,13 @@ int task_close_file(request* r, response* feedback){
         }
         file->opened_flag = 0;
         feedback->type = CLOSE_FILE_SUCCESS;
-        res = 0;
+        res = 1;
+        if(close(file->fd) == -1){
+            perror("Errore close file, in task_close_file");
+            res = 0;
+        }
+        if(!res) feedback->type = GENERIC_ERROR;
+        file->fd = -2;
     }
 
 finetask:

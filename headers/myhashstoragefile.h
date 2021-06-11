@@ -7,9 +7,10 @@
 #define NUMERO_PRIMO_ENORME 93199
 
 typedef struct node{
-	struct timespec creation_time;
+	int fd;
 	char* abs_path;
 	char* filename;
+	void* content;
 	unsigned long dim_bytes;
 	int modified_flag;
 	int opened_flag;
@@ -61,6 +62,7 @@ typedef struct _hash{
 
 //inizializzazioni server
 file_t* init_file(char *namefile);
+int writeContentFile(file_t* f);
 void init_list(list* l);
 void init_hash(hashtable *table, config s);
 

@@ -8,6 +8,7 @@ file_t* init_file(char *namefile){
 	new->abs_path= malloc(sizeof(char)*NAME_MAX);
 	memset(new->abs_path,0,sizeof(new->abs_path));
 	MY_REALPATH(init_file,namefile,new->abs_path);
+	new->fd = -2;
 	new->modified_flag = 0;
 	new->opened_flag = 0;
 	new->o_create_flag = 0;
@@ -15,14 +16,27 @@ file_t* init_file(char *namefile){
 	new->inCache_flag = 0;
 	new->next = NULL;
 	new->prec = NULL;
-	struct stat s;
-	if (stat(new->abs_path, &s) == -1) {
-        perror("stat creazione file\n");
-        exit(EXIT_FAILURE);
-    }
-	new->dim_bytes = s.st_size;
-	new->creation_time = s.st_atim;
 	return new;	
+}
+int writeContentFile(file_t* f){
+	int l;
+	struct stat s;
+	if(f->fd == -2){
+		perror("File non aperto, writeContent");
+		return 0;
+	}
+	if (stat(f->abs_path, &s) == -1) {
+        perror("stat creazione file\n");
+		return 0;
+    }
+	f->content = malloc(s.st_size);
+	while((l = read(f->fd,f->content,s.st_size)) > 0);
+	if(l == -1){
+		perror("lettura file in writeContentFile");
+		return 0;
+	}
+	f->dim_bytes += s.st_size;
+	return 1;
 }
 void init_list(list* l){
 	l->head = NULL;

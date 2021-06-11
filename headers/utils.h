@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <fcntl.h>  
 #include <time.h>
 #include <sys/socket.h>
 #include <pthread.h>
@@ -28,18 +29,12 @@
 #define NAME_MAX 1000
 #endif
 
-#if !defined(O_CREATE)
-#define O_CREATE 0
-#endif
 
-#if !defined(O_LOCK)
-#define O_LOCK 1
-#endif
+#define O_CREATE 1
 
+#define O_LOCK 2
 
-#if !defined(O_NOFLAGS)
-#define O_NOFLAGS 2
-#endif
+#define O_NOFLAGS -1
 
 
 #define BUFSIZE 1024

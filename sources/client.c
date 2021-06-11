@@ -10,7 +10,7 @@ static int flag_stamp_op = 0;
 static int msec_between_req = 0;
 
 int arg_h(char* s);
-int arg_f(char* s,char* sockname);
+int arg_f(char* newsock,char* oldsock);
 int arg_w(char* s,char* dir_rejectedFile);
 int writeFileDir(char* dirpath,char* dir_rejectedFile,int n,int flag_end,size_t* written_bytes);
 int arg_W(char* s,char* dir_rejectedFile);
