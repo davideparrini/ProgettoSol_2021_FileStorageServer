@@ -41,7 +41,7 @@
 #define O_NOFLAGS 2
 #endif
 
-#define _POSIX_C_SOURCE 2001112L
+
 #define BUFSIZE 1024
 typedef struct sockaddr_un SA;
 

@@ -13,6 +13,7 @@ typedef struct node{
 	unsigned long dim_bytes;
 	int modified_flag;
 	int opened_flag;
+	int o_create_flag;
 	int locked_flag;
 	int inCache_flag;
 	struct node *next;

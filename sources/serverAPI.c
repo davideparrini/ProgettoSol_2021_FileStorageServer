@@ -19,12 +19,13 @@
 #include <response.h>
 
 extern char* socket_path;
-int socket_c;
+extern int socket_c;
 
 
 int openConnection(const char* sockname, int msec, const struct timespec abstime){
     SA sockaddr;
     memset(&sockaddr, 0, sizeof(SA));
+    memset(&sockaddr.sun_path, 0, sizeof(sockaddr.sun_path));
     strncpy(sockaddr.sun_path, sockname ,strlen(sockname)+1);
     sockaddr.sun_family = AF_UNIX; 
   
@@ -36,7 +37,7 @@ int openConnection(const char* sockname, int msec, const struct timespec abstime
     time_t diff = 0;
     int tentativi = 0;
     while(abstime.tv_sec > diff){
-        if( connect(socket_c,(SA*)&sockaddr,sizeof(sockaddr)) != -1){
+        if(connect(socket_c,(struct sockaddr*)&sockaddr,sizeof(sockaddr)) != -1){
             printf("Connesso al server!\n");
             return 0;
         }
@@ -47,6 +48,7 @@ int openConnection(const char* sockname, int msec, const struct timespec abstime
                 diff = time(NULL) - before;
             }
             else{
+                PRINT_ERRNO("Openconnection",errno);
                 printf("Errore connessione c_socket!\n");
                 return -1;
             }  
@@ -300,12 +302,16 @@ int writeFile(const char* pathname, const char* dirname){
     }
     //se il flag della risposta del server è settato a 1, significa
     //che è stata passata in precedenza openFile(pathname, O_CREATE| O_LOCK)
-    if(feedback.flags != 1 && feedback.type == WRITE_FILE_FAILURE){
-        errno = EPERM;
-        return -1;
-    }
     else{
         switch (feedback.type){
+        
+        case WRITE_FILE_FAILURE:
+            errno = EPERM;
+            return -1;
+
+        case FILE_NOT_EXIST:
+            errno = ENOENT;
+            return -1;
 
         case NO_SPACE_IN_SERVER:
             errno = ENOSPC;

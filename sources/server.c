@@ -16,7 +16,7 @@ typedef struct {
 
 }stats;
 
-
+#define _POSIX_C_SOURCE 2001112L
 #define PATHCONFIG 50
 
 
@@ -25,7 +25,7 @@ static pthread_cond_t cond_var_pipe_WM = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mutex_file = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mutex_pipe_signal = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t mutex_pipe_worker_manager = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mutex_pipe_WM = PTHREAD_MUTEX_INITIALIZER;
 
 static char configFile_path[NAME_MAX] = {"configs/"};
 static char logFile_path[NAME_MAX] = {"logs/"};
@@ -48,10 +48,10 @@ void* manager_thread_function(void* args);
 int update_fdmax(fd_set set, int fd_num);
 void handle_connection(int *pclient_socket);
 void do_task(request* req_server,response *feedback);
-int task_openFile(request* r, response* feedback, int* flag_open_lock,int* flag_lock);
+int task_openFile(request* r, response* feedback);
 int task_read_file(request* r, response* feedback);
 int task_read_N_file(request* r, response* feedback);
-int task_write_file(request* r, response* feedback,int* flag_open_lock);
+int task_write_file(request* r, response* feedback);
 int task_append_file(request* r, response* feedback);
 int task_unlock_file(request* r, response* feedback);
 int task_close_file(request* r, response* feedback);
@@ -88,45 +88,53 @@ int main(int argc, char *argv[]){
 
     if (pthread_sigmask(SIG_SETMASK, &mask,NULL) != 0) {
 	    fprintf(stderr, "FATAL ERROR sigmask \n");
-        goto _exit;
+        cleanup();
+        exit(EXIT_FAILURE); 
     }
    */
   
     if ((pipe(signal_pipe))==-1) {
-	    perror("pipe");
-        goto _exit;
+	    perror("signalpipe");
+        cleanup();
+        exit(EXIT_FAILURE); 
     }
     if ((pipe(pipeWorker_manager))==-1) {
-	    perror("pipe");
-        goto _exit;
+	    perror("pipeWM");
+        cleanup();
+        exit(EXIT_FAILURE); 
     }
     
     pthread_t sighandler_thread;
     /*
     if(pthread_create(&sighandler_thread,NULL, sigHandler,&mask) == -1){
         perror("Errore creazione sighandler_thread");
-        goto _exit;
+        cleanup();
+        exit(EXIT_FAILURE);  
     }
     */
     if(pthread_create(&thread_manager,NULL, manager_thread_function,NULL) == -1){
         perror("Errore creazione thread_manager");
-        goto _exit;
+        cleanup();
+        exit(EXIT_FAILURE);  
     }
     for(size_t i = 0; i < configurazione.n_thread_workers;i++){
         if(pthread_create(&thread_workers[i],NULL, worker_thread_function,NULL) == -1){
             perror("Errore creazione thread_workers");
-            goto _exit;
+            cleanup();
+            exit(EXIT_FAILURE);  
         }
     }
 
     if(pthread_join(thread_manager,NULL) != 0){
         perror("Errore join thread_manager");
-        goto _exit;
+            cleanup();
+            exit(EXIT_FAILURE);  
     }
     for(size_t i = 0; i < configurazione.n_thread_workers;i++){
         if(pthread_join(thread_workers[i],NULL) != 0){
             perror("Errore join thread_workers");
-            goto _exit;
+            cleanup();
+            exit(EXIT_FAILURE);  
         }
     }
 /*
@@ -141,11 +149,9 @@ int main(int argc, char *argv[]){
     scanf("%s",c);
     setLogFile(c);
     create_FileLog();
+
     cleanup();
     return 0;
-_exit:
-    cleanup();
-    return -1;    
 }
 
 
@@ -316,7 +322,7 @@ void* manager_thread_function(void* args){
                     else{   
                         if(i == pipeWorker_manager[0]){
                             int fd_pipe;
-                            pthread_mutex_lock(&mutex_pipe_worker_manager);
+                            pthread_mutex_lock(&mutex_pipe_WM);
                             if((b = readn(pipeWorker_manager[0],&fd_pipe,sizeof(int)) == -1)){
                                 perror("Errore readn pipe");
                                 exit(EXIT_FAILURE);
@@ -325,7 +331,7 @@ void* manager_thread_function(void* args){
                             if(fdmax < fd_pipe) fdmax = fd_pipe;
                             flag_semaforo = 1;
                             pthread_cond_signal(&cond_var_pipe_WM);
-                            pthread_mutex_unlock(&mutex_pipe_worker_manager);
+                            pthread_mutex_unlock(&mutex_pipe_WM);
                         }
                         else{ //ascolto client-> readn -> metto in coda
                             request r;
@@ -409,14 +415,14 @@ void* worker_thread_function(void* args){
             perror("Errore writen pipe");
             exit(EXIT_FAILURE);
         }
-        pthread_mutex_lock(&mutex_pipe_worker_manager);
-        while(!flag_semaforo) pthread_cond_wait(&cond_var_pipe_WM,&mutex_pipe_worker_manager);
+        pthread_mutex_lock(&mutex_pipe_WM);
+        while(!flag_semaforo) pthread_cond_wait(&cond_var_pipe_WM,&mutex_pipe_WM);
         flag_semaforo = 0;
         if((b = writen(pipeWorker_manager[1],&r->socket_fd,sizeof(int))) == -1){
             perror("Errore writen pipe");
             exit(EXIT_FAILURE);
         }
-        pthread_mutex_unlock(&mutex_pipe_worker_manager);
+        pthread_mutex_unlock(&mutex_pipe_WM);
         free_request(r);
     }
 }
@@ -424,14 +430,13 @@ void* worker_thread_function(void* args){
 
 void do_task(request* r_from_client,response* feedback){
     //In caso di successo ritorna 1 else 0
-    int flag_open_lock = 0, flag_lock = 0;
     memset(feedback,0,sizeof(response));
     memset(feedback->content,0,sizeof(feedback->content));
 
     switch (r_from_client->type){
 
     case OPEN_FILE:
-        if(task_openFile(r_from_client,feedback,&flag_open_lock,&flag_lock)){
+        if(task_openFile(r_from_client,feedback)){
             stats_op.n_openfile++;
         }    
         break;
@@ -447,7 +452,7 @@ void do_task(request* r_from_client,response* feedback){
         }  
         break;
     case WRITE_FILE:
-        if(task_write_file(r_from_client,feedback,&flag_open_lock)){
+        if(task_write_file(r_from_client,feedback)){
             stats_op.n_writefile++;
         }  
         break;
@@ -483,15 +488,13 @@ void do_task(request* r_from_client,response* feedback){
     default:
         break;
     }
-    while(flag_open_lock || flag_lock){
-
-    }  
+    
     PRINT_ERRNO(r_from_client->type,errno);
 }
 
 
 
-int task_openFile(request* r, response* feedback, int* flag_open_lock,int* flag_lock){
+int task_openFile(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
     //DA RIGUARDARE O_LOCK
     file_t* f = research_file(storage,r->file_name);
@@ -502,6 +505,7 @@ int task_openFile(request* r, response* feedback, int* flag_open_lock,int* flag_
         if(f == NULL){
             f = init_file(r->file_name);
             f->opened_flag = 1;
+            f->o_create_flag = 1;
             if(!ins_file_server(&storage,f,&files_rejected)){
                 feedback->type = NO_SPACE_IN_SERVER;
             }
@@ -647,26 +651,30 @@ finetask:
     }
     return res;
 }
-int task_write_file(request* r, response* feedback,int* flag_open_lock){
+int task_write_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 
     int b,res = 0;
-    if(*flag_open_lock != 1){
-        feedback->type = WRITE_FILE_FAILURE;
+    file_t* f = research_file(storage,r->file_name);
+    if(f == NULL){
+        feedback->type = FILE_NOT_EXIST;
     }
     else{
-        list removed_files;
-        file_t* f = init_file(r->file_name);
-        if(ins_file_server(&storage,f,&removed_files)){
-            feedback->type = WRITE_FILE_SUCCESS;
-            res = 1;
-            if(r->dirname != NULL){
-                createFiles_inDir(r->dirname,&removed_files);
-            }
-            else concatList(&files_rejected,&removed_files);    
+        if(!f->locked_flag || !f->opened_flag || !f->o_create_flag){
+            feedback->type = WRITE_FILE_FAILURE;
         }
-        else feedback->type = NO_SPACE_IN_SERVER;    
+        else{
+            list removed_files;
+            if(ins_file_server(&storage,f,&removed_files)){
+                feedback->type = WRITE_FILE_SUCCESS;
+                res = 1;
+                if(r->dirname != NULL){
+                    createFiles_inDir(r->dirname,&removed_files);
+                }
+                else concatList(&files_rejected,&removed_files);    
+            }
+            else feedback->type = NO_SPACE_IN_SERVER;    
+        }
     }
-
     if((b = writen(r->socket_fd,&feedback,sizeof(feedback))) == -1){
         errno = EAGAIN;
     }

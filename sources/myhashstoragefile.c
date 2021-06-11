@@ -10,6 +10,7 @@ file_t* init_file(char *namefile){
 	MY_REALPATH(init_file,namefile,new->abs_path);
 	new->modified_flag = 0;
 	new->opened_flag = 0;
+	new->o_create_flag = 0;
 	new->locked_flag = 0;
 	new->inCache_flag = 0;
 	new->next = NULL;

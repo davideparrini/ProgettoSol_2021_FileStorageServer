@@ -5,6 +5,7 @@
 #define MAX_SOCKET_PATH 256
 
 char* socket_path;
+int socket_c;
 static int flag_stamp_op = 0;
 static int msec_between_req = 0;
 
