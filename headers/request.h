@@ -28,5 +28,16 @@ typedef struct f{
     req_type type;
 }request;
 
+typedef struct r__{
+    struct r__* next;
+    request *req;
+}req_t;
+
+void init_r(request *r);
+void push_r(request *r);
+request* pop_r();
+int isEmpty_r();
+void free_request();
+void rmv_r();
 
 #endif

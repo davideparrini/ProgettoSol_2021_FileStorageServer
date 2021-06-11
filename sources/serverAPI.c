@@ -124,7 +124,7 @@ int openFile(const char* pathname, int flags){
         return -1;
 
     case NO_SPACE_IN_SERVER:
-        errno = EOVERFLOW;
+        errno = ENOSPC;
         return -1;  
         
     case FILE_ALREADY_OPENED:
@@ -308,7 +308,7 @@ int writeFile(const char* pathname, const char* dirname){
         switch (feedback.type){
 
         case NO_SPACE_IN_SERVER:
-            errno = EOVERFLOW;
+            errno = ENOSPC;
             return -1;
 
         case WRITE_FILE_SUCCESS:
@@ -377,7 +377,7 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
         return -1;
 
     case NO_SPACE_IN_SERVER:
-		errno = EOVERFLOW;
+		errno = ENOSPC;
         return -1;
 
     case APPEND_FILE_SUCCESS:

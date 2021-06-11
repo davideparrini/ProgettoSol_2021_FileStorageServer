@@ -1,5 +1,10 @@
 #include <utils.h>
 
+void init_char_q(char c);
+void push_char(char c);
+char pop_char();
+int isEmpty_charq();
+
 
 int isdot(const char dir[]) {
   int l = strlen(dir);

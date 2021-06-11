@@ -1,5 +1,6 @@
-#include <myqueue.h>
+#include <myqueueconnections.h>
 #include <utils.h>
+#include <signal.h>
 #include <myhashstoragefile.h>
 
 typedef struct {
@@ -15,30 +16,38 @@ typedef struct {
 
 }stats;
 
-#define BUFSIZE 1024
 
-#define FILELOG "./logs/filelog.txt"
-pthread_cond_t cond_var = PTHREAD_COND_INITIALIZER;
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mutex_file = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mutex_pipe = PTHREAD_MUTEX_INITIALIZER;
+#define PATHCONFIG 50
 
-char configFile_path[NAME_MAX];
+
+static pthread_cond_t cond_var = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t cond_var_pipe_WM = PTHREAD_COND_INITIALIZER;
+static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mutex_file = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mutex_pipe_signal = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mutex_pipe_worker_manager = PTHREAD_MUTEX_INITIALIZER;
+
+static char configFile_path[NAME_MAX] = {"configs/"};
+static char logFile_path[NAME_MAX] = {"logs/"};
 config configurazione;
 static hashtable storage;
 static list files_rejected;
 static stats stats_op;
-int signal_pipe[2];
+static int signal_pipe[2];
+static int pipeWorker_manager[2];
+static int flag_semaforo = 0;
 
-void cleanup();
+void showDirConfig();
 void setConfigFile(char* s);
 void setUpServer(config* Server);
 void print_serverConfig();
+void cleanup();
 static void *sigHandler(void *arg);
 void* worker_thread_function(void* args);
 void* manager_thread_function(void* args);
+int update_fdmax(fd_set set, int fd_num);
 void handle_connection(int *pclient_socket);
-int do_task(request* req_server,int* client_s);
+void do_task(request* req_server,response *feedback);
 int task_openFile(request* r, response* feedback, int* flag_open_lock,int* flag_lock);
 int task_read_file(request* r, response* feedback);
 int task_read_N_file(request* r, response* feedback);
@@ -47,17 +56,20 @@ int task_append_file(request* r, response* feedback);
 int task_unlock_file(request* r, response* feedback);
 int task_close_file(request* r, response* feedback);
 int task_remove_file(request* r, response* feedback);
+void showDirLogs();
+void setLogFile();
 void create_FileLog();
 void createFiles_inDir(char* dirname,list* l);
 void createFiles_fromDupList_inDir(char* dirname,dupFile_list* l);
 void init_Stats();
 
 int main(int argc, char *argv[]){
-    if(argc != 2){
-        printf("Argomenti non validi!\nDevi passare il config file!\n");
-        exit(EXIT_FAILURE);
-    }
-    setConfigFile(argv[1]);
+
+    printf("Scegliere un file .txt di configurazione: \n");
+    showDirConfig();
+    char c[PATHCONFIG];
+    scanf("%s",c);
+    setConfigFile(c);
     setUpServer(&configurazione);
     print_serverConfig();
     init_hash(&storage,configurazione);
@@ -67,30 +79,35 @@ int main(int argc, char *argv[]){
     pthread_t thread_manager;
     pthread_t thread_workers[configurazione.n_thread_workers];
  
-
+/*
     sigset_t mask;
     sigemptyset(&mask);
     sigaddset(&mask, SIGINT); 
     sigaddset(&mask, SIGQUIT);
     sigaddset(&mask, SIGHUP);
 
-
     if (pthread_sigmask(SIG_SETMASK, &mask,NULL) != 0) {
 	    fprintf(stderr, "FATAL ERROR sigmask \n");
         goto _exit;
     }
-   
+   */
+  
     if ((pipe(signal_pipe))==-1) {
+	    perror("pipe");
+        goto _exit;
+    }
+    if ((pipe(pipeWorker_manager))==-1) {
 	    perror("pipe");
         goto _exit;
     }
     
     pthread_t sighandler_thread;
-
+    /*
     if(pthread_create(&sighandler_thread,NULL, sigHandler,&mask) == -1){
         perror("Errore creazione sighandler_thread");
         goto _exit;
     }
+    */
     if(pthread_create(&thread_manager,NULL, manager_thread_function,NULL) == -1){
         perror("Errore creazione thread_manager");
         goto _exit;
@@ -112,18 +129,98 @@ int main(int argc, char *argv[]){
             goto _exit;
         }
     }
-
+/*
     if(pthread_join(sighandler_thread, NULL) != 0){
         perror("Errore join sighandler_thread");
         goto _exit;
     }
-
+ */   
+    printf("Contenuto directory Logs:\n");
+    showDirLogs();
+    printf("Dare un nome al filelog.txt :\n");
+    scanf("%s",c);
+    setLogFile(c);
     create_FileLog();
     cleanup();
     return 0;
 _exit:
     cleanup();
     return -1;    
+}
+
+
+void showDirConfig(){
+    DIR * dir;
+    if((dir = opendir("./configs")) == NULL){
+        perror("Errore apertura configs DIR");
+        exit(EXIT_FAILURE);
+    }
+    struct dirent *file;
+    while((errno=0, file = readdir(dir)) != NULL) {      
+        if(!isdot(file->d_name)) printf(" -%s\n",file->d_name);
+    }
+    printf("\n");
+    free(file);
+    closedir(dir);
+}
+void setConfigFile(char * s){
+    if(s != NULL) strcat(configFile_path,s);
+    else{
+        fprintf(stderr,"Errore passaggio fileconfig_path\n");
+        exit(EXIT_FAILURE);
+    }
+    strcat(configFile_path,".txt");
+}
+void setUpServer(config *Server){
+    char buff[NAME_MAX];
+    FILE* conf;
+    memset(buff,0,NAME_MAX );
+    char* s;
+    if((conf = fopen(configFile_path, "r"))  == NULL){
+        perror("Errore apertura file conf");
+        exit(EXIT_FAILURE);
+    }
+    
+    if((s = fgets(buff,NAME_MAX,conf)) != NULL ){
+        Server->n_thread_workers = atoi(s);
+    }
+    else{
+        perror("Errore lettura N thread workers");
+        exit(EXIT_FAILURE);
+    }
+    
+    if((s = fgets(buff,NAME_MAX,conf) ) != NULL ){
+        Server->max_n_file = atoi(s);
+    }
+    else{
+        perror("Errore lettura max n file");
+        exit(EXIT_FAILURE);
+    }
+
+    if((s = fgets(buff,NAME_MAX,conf) ) != NULL ){
+        Server->memory_capacity = atof(s);
+    }
+    else{
+        perror("Errore lettura memory capacity");
+        exit(EXIT_FAILURE);
+    }
+
+    if((s = fgets(buff,NAME_MAX,conf)) != NULL ){
+        strncpy(Server->socket_name, s, strlen(s));
+    }
+    else{
+        perror("Errore lettura socket path");
+        exit(EXIT_FAILURE);
+    }
+
+    fclose(conf);
+}
+void print_serverConfig(){
+    printf("\nNumero di thread workers: %d\n",configurazione.n_thread_workers);
+    printf("Numero massimo di file nel server : %d\n",configurazione.max_n_file);
+    printf("Capacità di memoria del server (in MegaBytes) : %.2lf\n",configurazione.memory_capacity);
+    printf("Nome del socket : %s\n",configurazione.socket_name);
+
 }
 
 void cleanup() {
@@ -135,8 +232,8 @@ void* manager_thread_function(void* args){
     cleanup();
     atexit(cleanup);
     int server_socket, client_socket,b, sig;
-    SA serv_addr,client_addr;
-    socklen_t client_addr_length = sizeof(client_addr);
+    SA serv_addr;
+    
 
     if((server_socket = socket(AF_UNIX, SOCK_STREAM, 0)) == -1){
         perror("Errore Creazione socket_s");
@@ -146,7 +243,7 @@ void* manager_thread_function(void* args){
     strncpy(serv_addr.sun_path, configurazione.socket_name,NAME_MAX);
     serv_addr.sun_family = AF_UNIX; 
 
-    if(bind(server_socket,(struct sockaddr*) &serv_addr, 1) == -1){
+    if(bind(server_socket,(struct sockaddr*) &serv_addr, sizeof(serv_addr)) == -1){
         perror("Errore Bind socket_s");
         exit(EXIT_FAILURE);
     }
@@ -155,15 +252,16 @@ void* manager_thread_function(void* args){
         perror("Errore Listen Socket_s");
         exit(EXIT_FAILURE);
     }
-/////
     fd_set set, tmpset;
     FD_ZERO(&set);
     FD_ZERO(&tmpset);
 
     FD_SET(server_socket, &set);        // aggiungo il listener fd al master set
     FD_SET(signal_pipe[0], &set);  // aggiungo il descrittore di lettura della signal_pipe
+    FD_SET(pipeWorker_manager[0], &set);
     int fdmax = (server_socket > signal_pipe[0]) ? server_socket : signal_pipe[0];
-//////
+    fdmax = (fdmax > pipeWorker_manager[0]) ? fdmax : pipeWorker_manager[0];
+
     printf("Pronto a ricevere connessioni!\n");
     int termina = 0;
     while(!termina){
@@ -174,48 +272,96 @@ void* manager_thread_function(void* args){
         }
         for(int i = 0;i <= fdmax;i++){
             if(FD_ISSET(i,&tmpset)){
-                if(i == server_socket){
-                    if((client_socket = accept(server_socket,(struct sockaddr*)&client_addr, &client_addr_length)) == -1){
+                if(i == server_socket){ //ascolto
+                    if((client_socket = accept(server_socket,NULL, 0)) == -1){
                         perror("Errore Accept socket_s");
                         exit(EXIT_FAILURE);
                     }
+                    printf("Ricevuta connessione! Client_fd: %d\n",client_socket);
                     pthread_mutex_lock(&mutex);
                     push_q(&client_socket);
-                    pthread_cond_signal(&cond_var);
+                    
                     pthread_mutex_unlock(&mutex);
 
-                }
-            }
-            if (i == signal_pipe[0]) {
-                // ricevuto un segnale, esco ed inizio il protocollo di terminazione
-                pthread_mutex_lock(&mutex_pipe);
-                if((b = readn(signal_pipe[0],&sig,sizeof(int)) == -1)){
-                    perror("Errore readn pipe");
-                    exit(EXIT_FAILURE);
-                }
-                pthread_mutex_unlock(&mutex_pipe); 
-                if(sig == SIGINT || sig == SIGQUIT){
-                    pthread_mutex_lock(&mutex);
-                    pthread_cond_broadcast(&cond_var);
-                    pthread_mutex_unlock(&mutex);
-                    termina = 1;
-                    break;
-                }
-                if(sig == SIGHUP){
-                    close(server_socket);  
-                    FD_CLR(server_socket,&set);
-                    if(isEmpty_q()){
-                        pthread_mutex_lock(&mutex);
-                        pthread_cond_broadcast(&cond_var);
-                        pthread_mutex_unlock(&mutex);
-                        termina = 1;
+                } 
+                else{
+                    if (i == signal_pipe[0]) {
+                        // ricevuto un segnale, esco ed inizio il protocollo di terminazione
+                        pthread_mutex_lock(&mutex_pipe_signal);
+                        if((b = readn(signal_pipe[0],&sig,sizeof(int)) == -1)){
+                            perror("Errore readn pipe");
+                            exit(EXIT_FAILURE);
+                        }
+                        pthread_mutex_unlock(&mutex_pipe_signal); 
+                        if(sig == SIGINT || sig == SIGQUIT){
+                            pthread_mutex_lock(&mutex);
+                            pthread_cond_broadcast(&cond_var);
+                            pthread_mutex_unlock(&mutex);
+                            termina = 1;
+                            break;
+                        }
+                        if(sig == SIGHUP){
+                            close(server_socket);  
+                            FD_CLR(server_socket,&set);
+
+                            if(isEmpty_q()){
+                                pthread_mutex_lock(&mutex);
+                                pthread_cond_broadcast(&cond_var);
+                                pthread_mutex_unlock(&mutex);
+                                termina = 1;
+                            }
+                            break;
+                        }   
                     }
-                    break;
-                }
+                    else{   
+                        if(i == pipeWorker_manager[0]){
+                            int fd_pipe;
+                            pthread_mutex_lock(&mutex_pipe_worker_manager);
+                            if((b = readn(pipeWorker_manager[0],&fd_pipe,sizeof(int)) == -1)){
+                                perror("Errore readn pipe");
+                                exit(EXIT_FAILURE);
+                            }   
+                            FD_SET(fd_pipe,&set);
+                            if(fdmax < fd_pipe) fdmax = fd_pipe;
+                            flag_semaforo = 1;
+                            pthread_cond_signal(&cond_var_pipe_WM);
+                            pthread_mutex_unlock(&mutex_pipe_worker_manager);
+                        }
+                        else{ //ascolto client-> readn -> metto in coda
+                            request r;
+                            memset(&r,0,sizeof(request));
+                            pthread_mutex_lock(&mutex);
+                            if((b = readn(i,&r,sizeof(r)) == -1)){
+                                perror("Errore readn pipe");
+                                exit(EXIT_FAILURE);
+                            }
+                            FD_CLR(i,&set);
+                            if(i == fdmax) fdmax = update_fdmax(set,fdmax);
+                            push_r(&r);
+                            pthread_cond_signal(&cond_var);
+                            pthread_mutex_unlock(&mutex);
+
+                        }
+
+
+                    }
+                }   
             }
+            
         }
     }
     return NULL;
+}
+int update_fdmax(fd_set set, int fd_max){
+	int i, max = 0;
+
+	for(i = 0; i <= fd_max; i++){
+		if(FD_ISSET(i, &set)){
+			if(i > max)
+				max = i;
+		}
+	}
+	return max;
 }
 
 static void *sigHandler(void *arg) {
@@ -234,12 +380,12 @@ static void *sigHandler(void *arg) {
         case SIGINT:
         case SIGHUP:
         case SIGQUIT:
-            pthread_mutex_lock(&mutex_pipe);
+            pthread_mutex_lock(&mutex_pipe_signal);
             if((b = writen(signal_pipe[1],&sig,sizeof(int))) == -1){
                 perror("Errore writen pipe");
                 exit(EXIT_FAILURE);
             }
-            pthread_mutex_unlock(&mutex_pipe);
+            pthread_mutex_unlock(&mutex_pipe_signal);
             close(signal_pipe[1]);  // notifico il listener thread della ricezione del segnale
             return NULL;
         default:  ; 
@@ -250,99 +396,86 @@ static void *sigHandler(void *arg) {
 
 void* worker_thread_function(void* args){
     while (1){
-        int *pclient;
+        request *r;
+        int b;
+        memset(&r,0,sizeof(r));        
         pthread_mutex_lock(&mutex);
-        while((pclient = pop_q()) == NULL){
-            pthread_cond_wait(&cond_var,&mutex);
-        }    
+        while(isEmpty_r()) pthread_cond_wait(&cond_var,&mutex);
+        r = pop_r();
         pthread_mutex_unlock(&mutex);
-        if(pclient != NULL){
-            //connessi
-            handle_connection(pclient);    
+        response feedback;
+        do_task(r,&feedback);
+        if((b = writen(r->socket_fd,&feedback,sizeof(feedback))) == -1){
+            perror("Errore writen pipe");
+            exit(EXIT_FAILURE);
         }
+        pthread_mutex_lock(&mutex_pipe_worker_manager);
+        while(!flag_semaforo) pthread_cond_wait(&cond_var_pipe_WM,&mutex_pipe_worker_manager);
+        flag_semaforo = 0;
+        if((b = writen(pipeWorker_manager[1],&r->socket_fd,sizeof(int))) == -1){
+            perror("Errore writen pipe");
+            exit(EXIT_FAILURE);
+        }
+        pthread_mutex_unlock(&mutex_pipe_worker_manager);
+        free_request(r);
     }
-
-}
-void handle_connection(int *pclient_socket){
-    int client_socket = *(int*) pclient_socket;
-    request r_from_client;
-
-    memset(&r_from_client, 0, sizeof(request));
-    readn(client_socket, &r_from_client, sizeof(request)); 
-
-    if(do_task(&r_from_client,&client_socket)){
-        close(client_socket);
-        return ;
-    } 
-    printf("Impossibile svolgere task!\n");
-    close(client_socket);
-   // DA RIGUARDARE
 }
 
-int do_task(request* r_from_client,int* client_s){
+
+void do_task(request* r_from_client,response* feedback){
     //In caso di successo ritorna 1 else 0
-    int flag_open_lock = 0;
-    int flag_lock = 0;
-    int b,res = 0;
-    response feedback;
-    memset(feedback.content,0,sizeof(feedback.content));
+    int flag_open_lock = 0, flag_lock = 0;
+    memset(feedback,0,sizeof(response));
+    memset(feedback->content,0,sizeof(feedback->content));
+
     switch (r_from_client->type){
 
     case OPEN_FILE:
-        if(task_openFile(r_from_client,&feedback,&flag_open_lock,&flag_lock)){
-            res = 1;
+        if(task_openFile(r_from_client,feedback,&flag_open_lock,&flag_lock)){
             stats_op.n_openfile++;
         }    
         break;
     case READ_FILE:
-        if(task_read_file(r_from_client,&feedback)){
-            res = 1;
+        if(task_read_file(r_from_client,feedback)){
             stats_op.n_readfile++;
         } 
         break;
 
     case READ_N_FILE:
-        if(task_read_N_file(r_from_client,&feedback)){
-            res = 1;
+        if(task_read_N_file(r_from_client,feedback)){
             stats_op.n_readNfile++;
         }  
         break;
     case WRITE_FILE:
-        if(task_write_file(r_from_client,&feedback,&flag_open_lock)){
-            res = 1;
+        if(task_write_file(r_from_client,feedback,&flag_open_lock)){
             stats_op.n_writefile++;
         }  
         break;
     case APPEND_FILE:
-        if(task_append_file(r_from_client,&feedback)){
-            res = 1;
+        if(task_append_file(r_from_client,feedback)){
             stats_op.n_appendfile++;
         }  
         break;
     
     case REMOVE_FILE:
-        if(task_remove_file(r_from_client,&feedback)){
-            res = 1;
+        if(task_remove_file(r_from_client,feedback)){
             stats_op.n_removefile++;
         }  
         break;
     case CLOSE_FILE:
-        if(task_close_file(r_from_client,&feedback)){
-            res = 1;
+        if(task_close_file(r_from_client,feedback)){
             stats_op.n_closefile++;
         }  
         break;
     
     case LOCK_FILE:
-        if(task_lock_file(r_from_client,&feedback)){
-            res = 1;
+        if(task_lock_file(r_from_client,feedback)){
             stats_op.n_lockfile++;
         }  
         break;
     
     case UNLOCK_FILE:
-        if(task_unlock_file(r_from_client,&feedback)){
-            res = 1;
+        if(task_unlock_file(r_from_client,feedback)){
             stats_op.n_unlockfile++;
         }  
         break;
@@ -354,11 +487,6 @@ int do_task(request* r_from_client,int* client_s){
 
     }  
     PRINT_ERRNO(r_from_client->type,errno);
-    if((b = writen(*client_s,&feedback,sizeof(feedback))) == -1){
-        errno = EAGAIN;
-        return 0;
-    }
-    return res;
 }
 
 
@@ -369,7 +497,7 @@ int task_openFile(request* r, response* feedback, int* flag_open_lock,int* flag_
     file_t* f = research_file(storage,r->file_name);
     int res = 0, b;
     switch (r->flags){
-
+ 
     case O_CREATE :
         if(f == NULL){
             f = init_file(r->file_name);
@@ -391,6 +519,7 @@ int task_openFile(request* r, response* feedback, int* flag_open_lock,int* flag_
     
     case O_LOCK :
         break;
+
     case O_NOFLAGS :
         if(f == NULL)  feedback->type = O_CREATE_NOT_SPECIFIED_AND_FILE_NEXIST;
         else{
@@ -446,7 +575,6 @@ int task_read_file(request* r, response* feedback){
         }
         while((s = fgets(feedback->content,MAX_LENGHT_FILE,to_read)) != NULL);
         fclose(to_read);
-        free(to_read);
     }
 
     finetask:
@@ -490,7 +618,6 @@ int task_read_N_file(request* r, response* feedback){
                     }
                     contatore_file_letti++;
                     fclose(f);
-                    free(f);
                     free(s);
                     free(df);
                     free(buff);
@@ -528,7 +655,7 @@ int task_write_file(request* r, response* feedback,int* flag_open_lock){
     }
     else{
         list removed_files;
-        file_t* f;
+        file_t* f = init_file(r->file_name);
         if(ins_file_server(&storage,f,&removed_files)){
             feedback->type = WRITE_FILE_SUCCESS;
             res = 1;
@@ -571,7 +698,6 @@ int task_append_file(request* r, response* feedback){
             }
             fputs(r->buff,f);
             fclose(f);
-            free(f);
             feedback->type = APPEND_FILE_SUCCESS;
             res = 1;
         }
@@ -649,12 +775,34 @@ int task_remove_file(request* r, response* feedback){
     return res;
 }
 
+void showDirLogs(){
+    DIR * dir;
+    if((dir = opendir("./logs")) == NULL){
+        perror("Errore apertura configs DIR");
+        exit(EXIT_FAILURE);
+    }
+    struct dirent *file;
+    while((errno=0, file = readdir(dir)) != NULL) {      
+        if(!isdot(file->d_name)) printf(" -%s\n",file->d_name);
+    }
+    printf("\n");
+    free(file);
+    closedir(dir);
+}
 
+void setLogFile(char * s){
+    if(s != NULL) strcat(logFile_path,s);
+    else{
+        fprintf(stderr,"Errore passaggio fileconfig_path\n");
+        exit(EXIT_FAILURE);
+    }
+    strcat(logFile_path,".txt");
+}
 
 void create_FileLog(){
     
     FILE *f;
-    if((f= fopen(FILELOG,"a")) == NULL){
+    if((f= fopen(logFile_path,"a")) == NULL){
         perror("Errore creazione filelog");
     }
     fprintf(f,"Numero di file attualmente nel server : %d\n",storage.n_file);
@@ -703,65 +851,7 @@ void create_FileLog(){
     fclose(f);
 }
 
-void setConfigFile(char * s){
-    memset(&configFile_path,0,sizeof(configFile_path));
-    if(s != NULL) strcpy(configFile_path,s);
-    else{
-        fprintf(stderr,"Errore passaggio config_path\n");
-        exit(EXIT_FAILURE);
-    }
-}
-void setUpServer(config *Server){
-    char buff[NAME_MAX];
-    FILE* conf;
-    memset(buff,0,MAX_LENGHT_FILE);
-    char* s;
-    if((conf = fopen(configFile_path, "r"))  == NULL){
-        perror("Errore apertura file conf");
-        exit(EXIT_FAILURE);
-    }
-    
-    if((s = fgets(buff,NAME_MAX,conf)) != NULL ){
-        Server->n_thread_workers = atoi(s);
-        exit(EXIT_FAILURE);
-    }
-    else{
-        perror("Errore lettura N thread workers");
-        exit(EXIT_FAILURE);
-    }
-    if((s = fgets(buff,NAME_MAX,conf) ) != NULL ){
-        Server->max_n_file = atoi(s);
-    }
-    else{
-        perror("Errore lettura max n file");
-        exit(EXIT_FAILURE);
-    }
-    if((s = fgets(buff,NAME_MAX,conf) ) != NULL ){
-        Server->memory_capacity = atof(s);
-    }
-    else{
-        perror("Errore lettura memory capacity");
-        exit(EXIT_FAILURE);
-    }
-    if((s = fgets(buff,NAME_MAX,conf)) != NULL ){
-        strncpy(Server->socket_name, s, strlen(s));
-    }
-    else{
-        perror("Errore lettura socket path");
-        exit(EXIT_FAILURE);
-    }
-    
 
-    fclose(conf);
-    free(conf);
-}
-void print_serverConfig(){
-    printf("Numero di thread workers: %d\n",configurazione.n_thread_workers);
-    printf("Numero massimo di file nel server : %d\n",configurazione.max_n_file);
-    printf("Capacità di memoria del server (in MegaBytes) : %.2lf\n",configurazione.memory_capacity);
-    printf("Nome del socket : %s\n",configurazione.socket_name);
-
-}
 void createFiles_inDir(char* dirname,list* l){
   //crea file nella directory dirname, dirname deve essere il path assoluto della directory
   //i file sono passati dalla list l

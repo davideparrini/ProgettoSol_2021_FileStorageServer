@@ -1,4 +1,4 @@
-#include "myqueue.h"
+#include <myqueueconnections.h>
 #include <stdlib.h>
 //queue for request
 static node_t *head = NULL;

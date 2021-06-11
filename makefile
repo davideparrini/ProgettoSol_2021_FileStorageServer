@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -pedantic -std=c99 -g 
+CFLAGS = -Wall -pedantic  -g 
 THREAD_FLAGS = -lpthread 
 INCLUDES = -I ./headers
 OBJS = ./objects
@@ -26,13 +26,19 @@ client: $(CLIENT_DEPS)
 $(LIBS)/libapi.so: $(OBJS)/utils.o 
 	$(CC) $(CFLAGS) -shared -o $@ $^
 
-$(LIBS)/libclient.so: $(OBJS)/utils.o $(OBJS)/serverAPI.o
+$(LIBS)/libclient.so: $(OBJS)/utils.o $(OBJS)/serverAPI.o $(OBJS)/myqueueopt.o
 	$(CC) $(CFLAGS) -shared -o $@ $^
 
-$(LIBS)/libserver.so: $(OBJS)/utils.o $(OBJS)/myhashstoragefile.o $(OBJS)/myqueue.o
+$(LIBS)/libserver.so: $(OBJS)/utils.o $(OBJS)/myhashstoragefile.o $(OBJS)/myqueueconnections.o $(OBJS)/request.o
 	$(CC) $(CFLAGS) -shared -o $@ $^
 
-$(OBJS)/myqueue.o : $(SRC)/myqueue.c 
+$(OBJS)/myqueueconnections.o : $(SRC)/myqueueconnections.c 
+	$(CC) $(C_FLAGS) $(INCLUDES)  $^ -c -fPIC -o $@
+
+$(OBJS)/myqueueopt.o : $(SRC)/myqueueopt.c 
+	$(CC) $(C_FLAGS) $(INCLUDES)  $^ -c -fPIC -o $@
+
+$(OBJS)/request.o : $(SRC)/request.c 
 	$(CC) $(C_FLAGS) $(INCLUDES)  $^ -c -fPIC -o $@
 
 $(OBJS)/myhashstoragefile.o : $(SRC)/myhashstoragefile.c 

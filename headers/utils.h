@@ -18,6 +18,7 @@
 #include <signal.h>
 #include <libgen.h>
 #include <getopt.h>
+#include <dirent.h>
 
 #include <request.h>
 #include <response.h>
@@ -41,7 +42,7 @@
 #endif
 
 #define _POSIX_C_SOURCE 2001112L
-
+#define BUFSIZE 1024
 typedef struct sockaddr_un SA;
 
 typedef struct S{
@@ -50,7 +51,6 @@ typedef struct S{
     double memory_capacity;
     char socket_name[NAME_MAX];
 }config;
-
 
 
 #define SYSCALL_EXIT(name, r, sc, str, ...)	\
@@ -62,7 +62,7 @@ typedef struct S{
     }
 
 #define MY_REALPATH(from_where,path,resolved_path)\
-    if(realpath(path,resolved_path) == NULL){ \
+    if((realpath(path,resolved_path)) == NULL){ \
 		perror(#from_where);\
 		int errno_copy = errno;	 \
         exit(errno_copy); \

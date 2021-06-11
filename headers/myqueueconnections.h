@@ -1,6 +1,6 @@
-#ifndef MYQUEUE_H_
-#define MYQUEUE_H_
-//queue for request
+#ifndef MYQUEUECONNECTIONS_H_
+#define MYQUEUECONNECTIONS_H_
+//queue for connection
 typedef struct node__{
     struct node__* next;
     int *client_socket;
