@@ -27,20 +27,20 @@ int openConnection(const char* sockname, int msec, const struct timespec abstime
     strcpy(sockaddr.sun_path, sockname);
     sockaddr.sun_family = AF_UNIX; 
     
-    printf("\nFILE DESCRIPTOR %d\n",client_fd);//Risultato aspettato : 0 Risultato effettivo : 0
+    printf("\nFILE DESCRIPTOR CLIENT_FD %d\n",client_fd);//Risultato aspettato : 0 Risultato effettivo : 0
 
     if(client_fd = socket(AF_UNIX, SOCK_STREAM, 0) == -1){
         perror("Errore Creazione socket_c");
         exit(EXIT_FAILURE);
     }
 
-    printf("\nFILE DESCRIPTOR %d\n",client_fd); //Risultato aspettato : NUMERO INTERO, Risultato effettivo : 0
+    printf("\nFILE DESCRIPTOR CLIENT_FD DOPO CHIAMATA SOCKET() %d\n",client_fd); //Risultato aspettato : NUMERO INTERO, Risultato effettivo : 0
 	int test_fd;
     if(test_fd = socket(AF_UNIX, SOCK_STREAM, 0) == -1){
         perror("Errore Creazione ssssc");
         exit(EXIT_FAILURE);
     }
-    printf("\nFILE DESCRIPTOR %d  test_fd : %d\n",client_fd,test_fd);//Risultato aspettato : NUMERO INTERO, NUMERO MAGGIORE DEL PRIMO  Risultato effettivo : 0 , 0
+    printf("\nFILE DESCRIPTOR CLIENT_FD %d test_fd : %d\n ENTRAMBE DOPO CHIAMATA socket()\n",client_fd,test_fd);//Risultato aspettato : NUMERO INTERO, NUMERO MAGGIORE DEL PRIMO  Risultato effettivo : 0 , 0
 
     time_t before = time(NULL);
     time_t diff = 0;
