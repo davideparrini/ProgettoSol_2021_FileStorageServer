@@ -78,6 +78,7 @@ file_t* pop_list(list *cell);
 void ins_file_cache(hashtable *table,file_t* file); 
 void ins_file_hashtable(hashtable *table, file_t* file);
 //ins e rimozione file server seguendo politica lru
+int init_file_inServer(hashtable* table,file_t *f,list* list_reject);
 int ins_file_server(hashtable* storage, file_t *f,list* list_reject);
 file_t* remove_file_server(hashtable* table, file_t* f);
 //estrazione di file
@@ -109,4 +110,5 @@ void ins_head_dupFilelist(dupFile_list *l,dupFile_t *file);
 dupFile_t* pop_dupFilelist(dupFile_list *cell);
 void ins_dupList_to_list(hashtable* table, list* l, dupFile_list* dl);
 void free_duplist(dupFile_list* dl);
+int isEmpty_duplist(dupFile_list dl);
 #endif

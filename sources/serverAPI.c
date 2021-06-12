@@ -19,25 +19,35 @@
 #include <response.h>
 
 extern char* socket_path;
-extern int socket_c;
-
+extern int client_fd;
 
 int openConnection(const char* sockname, int msec, const struct timespec abstime){
     SA sockaddr;
     memset(&sockaddr, 0, sizeof(SA));
-    memset(&sockaddr.sun_path, 0, sizeof(sockaddr.sun_path));
-    strncpy(sockaddr.sun_path, sockname ,strlen(sockname)+1);
+    strcpy(sockaddr.sun_path, sockname);
     sockaddr.sun_family = AF_UNIX; 
-  
-	if(socket_c = socket(AF_UNIX, SOCK_STREAM, 0) == -1){
+    
+    printf("\nFILE DESCRIPTOR %d\n",client_fd);//Risultato aspettato : 0 Risultato effettivo : 0
+
+    if(client_fd = socket(AF_UNIX, SOCK_STREAM, 0) == -1){
         perror("Errore Creazione socket_c");
         exit(EXIT_FAILURE);
     }
+
+    printf("\nFILE DESCRIPTOR %d\n",client_fd); //Risultato aspettato : NUMERO INTERO, Risultato effettivo : 0
+	int test_fd;
+    if(test_fd = socket(AF_UNIX, SOCK_STREAM, 0) == -1){
+        perror("Errore Creazione ssssc");
+        exit(EXIT_FAILURE);
+    }
+    printf("\nFILE DESCRIPTOR %d  test_fd : %d\n",client_fd,test_fd);//Risultato aspettato : NUMERO INTERO, NUMERO MAGGIORE DEL PRIMO  Risultato effettivo : 0 , 0
+
     time_t before = time(NULL);
     time_t diff = 0;
     int tentativi = 0;
     while(abstime.tv_sec > diff){
-        if(connect(socket_c,(struct sockaddr*)&sockaddr,sizeof(sockaddr)) != -1){
+         
+        if(connect(client_fd,(struct sockaddr*)&sockaddr,sizeof(sockaddr)) != -1){
             printf("Connesso al server!\n");
             return 0;
         }
@@ -49,7 +59,6 @@ int openConnection(const char* sockname, int msec, const struct timespec abstime
             }
             else{
                 PRINT_ERRNO("Openconnection",errno);
-                printf("Errore connessione c_socket!\n");
                 return -1;
             }  
         }
@@ -67,7 +76,7 @@ int closeConnection(const char* sockname){
         errno = EBADF;
         return -1;
     }
-    if(close(socket_c) == -1){
+    if(close(client_fd) == -1){
         errno = EBADF;
         return -1;
     }
@@ -84,20 +93,20 @@ int openFile(const char* pathname, int flags){
     memset(&feedback, 0, sizeof(response));
     r.flags = flags;
     r.type = OPEN_FILE; 
-    r.socket_fd = socket_c;
+    r.socket_fd = client_fd;
     r.file_name = malloc(sizeof(char)* NAME_MAX);
     memset(&r.file_name,0,sizeof(r.file_name));
     memset(&feedback.content,0,sizeof(feedback.content));
     MY_REALPATH(openFile,pathname,r.file_name);
 
-    if(b = writen(socket_c,&r,sizeof(r)) == -1){
+    if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
         return -1;
     }
 
     free(r.file_name);
 
-    if(b = readn(socket_c,&feedback,sizeof(feedback)) == -1){
+    if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
         return -1;
 
@@ -158,18 +167,18 @@ int readFile(const char* pathname, void** buf, size_t* size){
     memset(&feedback, 0, sizeof(response));
     memset(&feedback.content,0,sizeof(feedback.content));
     r.type = READ_FILE; 
-    r.socket_fd = socket_c;
+    r.socket_fd = client_fd;
 
     memset(&feedback.content,0,sizeof(feedback.content));
     MY_REALPATH(readFile,pathname,r.file_name);
-    if(b = writen(socket_c,&r,sizeof(r)) == -1){
+    if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
         return -1;
     }
 
     free(r.file_name);
 
-    if(b = readn(socket_c,&feedback,sizeof(feedback)) == -1){
+    if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
         return -1;
     }
@@ -201,9 +210,9 @@ int readFile(const char* pathname, void** buf, size_t* size){
     default: break;
     }
     *size = feedback.size;
-    *buf = malloc(sizeof(char) * (feedback.size + 1));
-    memset(buf, 0, feedback.size + 1);
-    strncpy(*buf,feedback.content,*size);
+    *buf = malloc(feedback.size+1);
+    memset(buf, 0, feedback.size+1);
+    memcpy(*buf,&feedback.content,*size);
     errno = 0;
     return 0;
 
@@ -224,32 +233,37 @@ int readNFiles(int N, const char* dirname){
     else r.dirname = NULL;
 
     r.type = READ_N_FILE; 
-    r.socket_fd = socket_c;
+    r.socket_fd = client_fd;
     r.c = N;
 
-    if(b = writen(socket_c,&r,sizeof(r)) == -1){
+    if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
         return -1;
     }
 
     free(r.dirname);
     int n_to_read;
-    if(b = readn(socket_c,&n_to_read,sizeof(int)) == -1){
+    if(b = readn(client_fd,&n_to_read,sizeof(int)) == -1){
         errno = EAGAIN;
         return -1;
     }
     int i = 1;
     while(i <= n_to_read){
-        char *buff = malloc(sizeof(char) * MAX_LENGHT_FILE);
-        if(b = readn(socket_c,&buff,sizeof(buff)) == -1){
+        size_t buff_size;
+        if(b = readn(client_fd,&buff_size,sizeof(size_t)) == -1){
             errno = EAGAIN;
         }
-        printf("****Contenuto file %d :****\n%s\n\n",i,buff);
+        void *buff = malloc(buff_size+1);
+        memset(&buff,0,buff_size);
+        if(b = readn(client_fd,&buff,buff_size) == -1){
+            errno = EAGAIN;
+        }
+        printf("****Contenuto file %d :****\n%s\n\n",i,(char*) buff);
         free(buff);
         i++;
     }
 
-    if(b = readn(socket_c,&feedback,sizeof(feedback)) == -1){
+    if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
         return -1;
     }
@@ -281,7 +295,7 @@ int writeFile(const char* pathname, const char* dirname){
     memset(&feedback.content,0,sizeof(feedback.content));
 
     r.type = WRITE_FILE;
-    r.socket_fd = socket_c;
+    r.socket_fd = client_fd;
     MY_REALPATH(writeFile,pathname,r.file_name);
     if(dirname != NULL){
         MY_REALPATH(writeFile,dirname,r.dirname);
@@ -289,14 +303,14 @@ int writeFile(const char* pathname, const char* dirname){
     else{
         r.dirname = NULL;
     }
-    if(b = writen(socket_c,&r,sizeof(r)) == -1){
+    if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
         return -1;
     }
     free(r.dirname);
     free(r.file_name);
     
-    if(b = readn(socket_c,&feedback,sizeof(feedback)) == -1){
+    if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
         return -1;
     }
@@ -347,7 +361,7 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
     r.buff = buf;
     r.request_size = size;
     r.type = APPEND_FILE;
-    r.socket_fd = socket_c;
+    r.socket_fd = client_fd;
     MY_REALPATH(appendToFile,pathname,r.file_name);
     if(dirname != NULL){
         MY_REALPATH(appendToFile,dirname,r.dirname);
@@ -355,7 +369,7 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
     else{
         r.dirname = NULL;
     }
-    if(b = writen(socket_c,&r,sizeof(r)) == -1){
+    if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
         return -1;
     }
@@ -363,7 +377,7 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
     free(r.file_name);
     free(r.buff);
 
-    if(b = readn(socket_c,&feedback,sizeof(feedback)) == -1){
+    if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
         return -1;
     }
@@ -409,16 +423,16 @@ int closeFile(const char* pathname){
     memset(&feedback.content,0,sizeof(feedback.content));
 
     r.type = CLOSE_FILE;
-    r.socket_fd = socket_c;
+    r.socket_fd = client_fd;
     MY_REALPATH(closeFile,pathname,r.file_name);
 
-    if(b = writen(socket_c,&r,sizeof(r)) == -1){
+    if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
         return -1;
     }
     free(r.file_name);
     
-    if(b = readn(socket_c,&feedback,sizeof(feedback)) == -1){
+    if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
         return -1;
     }
@@ -455,16 +469,16 @@ int removeFile(const char* pathname){
     memset(&feedback.content,0,sizeof(feedback.content));
 
     r.type = REMOVE_FILE;
-    r.socket_fd = socket_c;
+    r.socket_fd = client_fd;
     MY_REALPATH(appendToFile,pathname,r.file_name);
    
-    if(b = writen(socket_c,&r,sizeof(r)) == -1){
+    if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
         return -1;
     }
     free(r.file_name);
     
-    if(b = readn(socket_c,&feedback,sizeof(feedback)) == -1){
+    if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
         return -1;
     }

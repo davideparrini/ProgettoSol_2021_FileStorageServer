@@ -1,4 +1,4 @@
 12
 200
 120.241
-./server_sock
+/tmp/server_sock

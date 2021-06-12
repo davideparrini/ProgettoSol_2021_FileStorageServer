@@ -5,7 +5,7 @@
 #define MAX_SOCKET_PATH 256
 
 char* socket_path;
-int socket_c;
+int client_fd;
 static int flag_stamp_op = 0;
 static int msec_between_req = 0;
 
@@ -28,12 +28,11 @@ int arg_a(char* s);
 
 int main(int argc, char *argv[]){
     socket_path = malloc(sizeof(char)*MAX_SOCKET_PATH);
-    memset(socket_path,0,strlen(socket_path));
+    memset(socket_path,0,sizeof(socket_path));
     
     struct timespec timer_connection;
     timer_connection.tv_nsec = 0;
     timer_connection.tv_sec = 20;
-
     
     if(argc < 2){
         printf("Pochi argomenti!\n");
@@ -258,10 +257,9 @@ int arg_h(char* s){
 }
 
 
-int arg_f(char* s,char *sockname){
-    memset(sockname,0,MAX_SOCKET_PATH);
-    strncpy(sockname,s,MAX_SOCKET_PATH);
-    printf("Ora il socket su cui connettersi è : %s\n",sockname);
+int arg_f(char* newsock,char* oldsock){
+    strcpy(oldsock,newsock);
+    printf("Ora il socket su cui connettersi è : %s\n",oldsock);
     return 0;
 }
 
@@ -435,8 +433,14 @@ int arg_c(char* s){
 }
 
 int arg_p(){
-    if(flag_stamp_op) flag_stamp_op = 0;
-    else flag_stamp_op = 1;
+    if(flag_stamp_op) {
+        printf("Stampe disabilitate!\n");
+        flag_stamp_op = 0;
+    }
+    else{
+        printf("Stampe abilitate!\n");
+        flag_stamp_op = 1;
+    }
     return 0;
 }
 

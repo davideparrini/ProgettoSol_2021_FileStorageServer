@@ -1,4 +1,4 @@
 1
 30
 10.46784459
-./server_sock
+/tmp/server_sock

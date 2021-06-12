@@ -33,11 +33,10 @@ typedef enum{
 
 typedef struct s{
     response_type type;
-    int size;
+    size_t size;
     int flags;
     int c; //contatore generico
-    unsigned long bytes_used;
-    char content[MAX_LENGHT_FILE];
+    void * content;
 }response;
 
 #endif
