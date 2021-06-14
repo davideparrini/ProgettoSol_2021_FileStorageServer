@@ -28,16 +28,19 @@ int arg_a(char* s);
 
 int main(int argc, char *argv[]){
     socket_path = malloc(sizeof(char)*MAX_SOCKET_PATH);
-    memset(socket_path,0,sizeof(socket_path));
+    memset(socket_path,0,strlen(socket_path ));
     
     struct timespec timer_connection;
-    timer_connection.tv_nsec = 0;
-    timer_connection.tv_sec = 20;
-    
+    time_t msec;
     if(argc < 2){
         printf("Pochi argomenti!\n");
         exit(EXIT_FAILURE);
     }
+    printf("Setup client!\n");
+    printf("Digitare secondi di attesa di connessione al server:\n");
+    scanf("%ld",&timer_connection.tv_sec);
+    printf("\nDigitare millisecondi, in caso di mancata connessione, verrà rinviata la richiesta di connessione:\n");
+    scanf("%ld",&msec);
 
     int opt, temp_opt = 0;
     int termina = 0;
@@ -158,6 +161,7 @@ int main(int argc, char *argv[]){
 
         default: break;
         }
+        msleep(msec_between_req); 
         temp_opt = opt;
     }
     if(!f){
@@ -165,7 +169,7 @@ int main(int argc, char *argv[]){
         exit(EXIT_FAILURE);
     }
 
-    if(openConnection(socket_path,100,timer_connection) == -1){
+    if(openConnection(socket_path,msec,timer_connection) == -1){
         perror("Non connesso, errore in openConnection");
         exit(EXIT_FAILURE);
     }
@@ -231,9 +235,10 @@ int main(int argc, char *argv[]){
 
 
     if(closeConnection(socket_path) == -1){
+        perror("Errore closeConnection");
         fprintf(stderr, "closeConnection Value of errno : %d\n", errno);
     }
-
+    return 0;
 }
 
 
@@ -270,7 +275,12 @@ int arg_w(char* s,char* dir_rejectedFile){
     char absPathdir[NAME_MAX];
     memset(absPathdir,0,sizeof(absPathdir));
     char* nfile = strtok(NULL,",");
-    MY_REALPATH("arg_w",dirname,absPathdir);
+    realpath(dirname,absPathdir);
+    if(absPathdir == NULL){
+        perror("Errore realpath");
+        exit(EXIT_FAILURE); 
+    }
+
     int n, flag_end = 0;
     if(nfile != NULL) n = atoi(nfile);
     else n = 0;
@@ -351,8 +361,8 @@ int arg_W(char* s,char* dir_rejectedFile){
 
 int arg_r(char* s,char* dirname){
     char* token = strtok(s,",");
-    char absPath[NAME_MAX];
-    memset(absPath,0,sizeof(absPath));
+    char *absPath = malloc(sizeof(char) * NAME_MAX);
+    memset(&absPath,0, sizeof(absPath) );
     char* buff;
     size_t size;
     int esito = 0;
@@ -363,8 +373,9 @@ int arg_r(char* s,char* dirname){
         }
         printf("*Contenuto File:\n%s\n",buff);  
         if(dirname != NULL){
-            MY_REALPATH("arg_r",token,absPath);
-            strcat(absPath,dirname);
+
+            myRealPath(dirname,&absPath);
+            strcat(absPath,token);
             FILE* new;
             
             if((new = fopen(absPath,"a")) == NULL){
@@ -382,9 +393,10 @@ int arg_r(char* s,char* dirname){
             fclose(new);
         }    
         memset(buff,0,size);
-        memset(absPath,0,sizeof(absPath));
+        memset(&absPath,0,sizeof(absPath));
         token = strtok(NULL,",");
     }
+    free(absPath); 
     free(token);
     free(buff);
     if(flag_stamp_op){
@@ -445,14 +457,12 @@ int arg_p(){
 }
 
 int arg_o(char* s){
-    int esito = 0,o_flag = O_NOFLAGS;
-    char* flag = strtok(s," ");
-
-    if(strcmp(flag,"O_CREATE")) o_flag = O_CREATE;
-    if(strcmp(flag,"O_LOCK")) o_flag = O_LOCK;
-    if(strcmp(flag,"O_NOFLAGS")) o_flag = O_NOFLAGS;
-
-
+    int esito = 0,o_flag;
+    char* flag = strtok(s,":");
+    if(!strcmp(flag,"O_CREATE")) o_flag = O_CREATE;
+    else if(!strcmp(flag,"O_LOCK")) o_flag = O_LOCK;
+    else if(!strcmp(flag,"O_CREATE|O_LOCK")) o_flag = O_CREATE|O_LOCK;
+    else if(!strcmp(flag,"O_NOFLAGS")) o_flag = O_NOFLAGS;
     char* token = strtok(NULL,",");
     while(token != NULL && !esito){
         if((esito = openFile(token,o_flag)) == -1){

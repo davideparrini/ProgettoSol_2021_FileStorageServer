@@ -29,12 +29,13 @@
 #define NAME_MAX 1000
 #endif
 
+#define O_NOFLAGS 00
 
-#define O_CREATE 1
+#define O_CREATE 01
 
-#define O_LOCK 2
+#define O_LOCK 10
 
-#define O_NOFLAGS -1
+
 
 
 #define BUFSIZE 1024
@@ -56,14 +57,6 @@ typedef struct S{
 	exit(errno_copy);			\
     }
 
-#define MY_REALPATH(from_where,path,resolved_path)\
-    if((realpath(path,resolved_path)) == NULL){ \
-		perror(#from_where);\
-		int errno_copy = errno;	 \
-        exit(errno_copy); \
-	}
-
-
 #define MY_GETCWD(from_where,buf)\
     if(getcwd(buf,sizeof(buf)) == NULL){ \
 		perror(#from_where);\
@@ -81,7 +74,7 @@ typedef struct S{
     printf("Tipo operazione :%s\nSul file: %s\nOre: %s\nEsito: ",nome_operazione,file_riferimento,ctime(orario) );\
     if(!esito){ \
         printf("Successo!\n"); \
-        if(bytes != 0) printf("bytes letti/scritti : %lu\n",bytes);        \
+        if(bytes != 0) printf("bytes letti/scritti : %lu\n",(unsigned long)bytes);        \
     }           \
     else printf("Fallimento!\n")
 
@@ -122,8 +115,9 @@ int msleep(unsigned int tms);
 int isNumber(const char* s, long* n);
 int isdot(const char dir[]);
 
-double bytesToKb(long bytes);
-double bytesToMb(long bytes);
-unsigned long KbToBytes(double Kb);
-unsigned long MbToBytes(double Mb);
+int myRealPath(const char * actaulpath, char** resolvedPath);
+double bytesToKb(size_t bytes);
+double bytesToMb(size_t bytes);
+size_t KbToBytes(double Kb);
+size_t MbToBytes(double Mb);
 #endif 

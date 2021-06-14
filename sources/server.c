@@ -224,7 +224,7 @@ void setUpServer(config *Server){
 void print_serverConfig(){
     printf("\nNumero di thread workers: %d\n",configurazione.n_thread_workers);
     printf("Numero massimo di file nel server : %d\n",configurazione.max_n_file);
-    printf("Capacità di memoria del server (in MegaBytes) : %.2lf\n",configurazione.memory_capacity);
+    printf("Capacità di memoria del server (in MegaBytes) : %.2lf Mb\n",configurazione.memory_capacity);
     printf("Nome del socket : %s\n\n",configurazione.socket_name);
 
 }
@@ -269,15 +269,22 @@ void* manager_thread_function(void* args){
     FD_SET(pipeWorker_manager[0], &set);
     int fdmax = (server_fd > signal_pipe[0]) ? server_fd : signal_pipe[0];
     fdmax = (fdmax > pipeWorker_manager[0]) ? fdmax : pipeWorker_manager[0];
-
+    int c = 0;
     printf("Pronto a ricevere connessioni!\n");
     int termina = 0;
     while(!termina){
+        printf("ATTENDO CONNESSIONE %d\n",c);
+        
+        pthread_mutex_lock(&mutex);
         tmpset = set;
+        pthread_mutex_unlock(&mutex);
+        printf("fdmax %d\n",fdmax);
         if(select(fdmax+1,&tmpset,NULL,NULL,NULL) == -1){
             perror("Errore in select");
             exit(EXIT_FAILURE);
         }
+        printf("select %d\n",c);
+        c++;
         for(int i = 0;i <= fdmax;i++){
             if(FD_ISSET(i,&tmpset)){
                 if(i == server_fd){ //ascolto
@@ -288,13 +295,13 @@ void* manager_thread_function(void* args){
                     printf("Ricevuta connessione! Client_fd: %d\n",client_fd);
                     pthread_mutex_lock(&mutex);
                     push_q(&client_fd);
-                    
                     pthread_mutex_unlock(&mutex);
-
+                    if(client_fd > fdmax) fdmax = client_fd;
                 } 
                 else{
                     if (i == signal_pipe[0]) {
                         // ricevuto un segnale, esco ed inizio il protocollo di terminazione
+                        printf("Ascolto segnale\n");
                         pthread_mutex_lock(&mutex_pipe_signal);
                         if((b = readn(signal_pipe[0],&sig,sizeof(int)) == -1)){
                             perror("Errore readn pipe");
@@ -322,6 +329,7 @@ void* manager_thread_function(void* args){
                         }   
                     }
                     else{   
+                        printf("Ascolto pipiWM\n");
                         if(i == pipeWorker_manager[0]){
                             int fd_pipe;
                             pthread_mutex_lock(&mutex_pipe_WM);
@@ -336,6 +344,7 @@ void* manager_thread_function(void* args){
                             pthread_mutex_unlock(&mutex_pipe_WM);
                         }
                         else{ //ascolto client-> readn -> metto in coda
+                            printf("Ascolto richiesta\n");
                             request r;
                             memset(&r,0,sizeof(request));
                             pthread_mutex_lock(&mutex);
@@ -403,14 +412,20 @@ static void *sigHandler(void *arg) {
 }
 
 void* worker_thread_function(void* args){
+    int c = 0;
     while (1){
         request *r;
         int b;
         memset(&r,0,sizeof(r));        
         pthread_mutex_lock(&mutex);
+        printf("ESEGUO %d!\n",c);
+        c++;
         while(isEmpty_r()) pthread_cond_wait(&cond_var,&mutex);
         r = pop_r();
+        printf("EssssssssssssssssssssssssssssssSEGUO1212122!\n");
         pthread_mutex_unlock(&mutex);
+
+        
         response feedback;
         do_task(r,&feedback);
         if((b = writen(r->socket_fd,&feedback,sizeof(feedback))) == -1){
@@ -434,7 +449,6 @@ void do_task(request* r_from_client,response* feedback){
     //In caso di successo ritorna 1 else 0
     memset(feedback,0,sizeof(response));
     memset(feedback->content,0,sizeof(feedback->content));
-
     switch (r_from_client->type){
 
     case OPEN_FILE:
@@ -572,6 +586,10 @@ int task_openFile(request* r, response* feedback){
                 }
                 if(!res) feedback->type = GENERIC_ERROR;
             }
+        }
+        else{
+            free_file(f);
+            feedback->type = FILE_ALREADY_EXIST;
         }
     
         break;
@@ -752,12 +770,30 @@ int task_append_file(request* r, response* feedback){
 
         pthread_mutex_lock(&mutex_file);
         if(modifying_file(&storage,file,r->request_size,&files_rejected)){
-            FILE* f;
-            if((f = fopen(r->file_name,"a")) == NULL){
-                perror("Errore apertura appendfile");
+            close(file->fd);
+            if((file->fd = open(file->abs_path,O_WRONLY|O_APPEND)) == -1){
+                perror("Errore apertura file in task_appendToFile");
+                res = 0;
+                feedback->type = GENERIC_ERROR;
+                pthread_mutex_unlock(&mutex_file); 
+                goto finetask;
             }
-            fputs(r->buff,f);
-            fclose(f);
+            if(write(file->fd,r->buff,r->request_size) < 0){
+                perror("Errore scrittura file in task_appendToFile");
+                res = 0;
+                feedback->type = GENERIC_ERROR;
+                pthread_mutex_unlock(&mutex_file); 
+                goto finetask;
+            }
+            close(file->fd);
+            if((file->fd = open(file->abs_path,O_RDWR)) == -1){
+                perror("Errore apertura 2 file in task_appendToFile");
+                res = 0;
+                feedback->type = GENERIC_ERROR;
+                pthread_mutex_unlock(&mutex_file); 
+                goto finetask;
+            }
+            
             feedback->type = APPEND_FILE_SUCCESS;
             res = 1;
         }

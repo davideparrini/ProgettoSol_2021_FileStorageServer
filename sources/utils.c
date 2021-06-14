@@ -1,46 +1,52 @@
 #include <utils.h>
 
-void init_char_q(char c);
-void push_char(char c);
-char pop_char();
-int isEmpty_charq();
-
-
 int isdot(const char dir[]) {
-  int l = strlen(dir);
-  
-  if ( (l>0 && dir[l-1] == '.') ) return 1;
-  return 0;
+	int l = strlen(dir);
+	
+	if ( (l>0 && dir[l-1] == '.') ) return 1;
+	return 0;
 }
 
 
 
 int isNumber(const char* s, long* n){
-  if (s==NULL) return 1;
-  if (strlen(s)==0) return 1;
-  char* e = NULL;
-  errno=0;
-  long val = strtol(s, &e, 10);
-  if (errno == ERANGE) return 2;    // overflow
-  if (e != NULL && *e == (char)0) {
-    *n = val;
-    return 0;   // successo 
-  }
-  return 1;   // non e' un numero
+	if (s==NULL) return 1;
+	if (strlen(s)==0) return 1;
+	char* e = NULL;
+	errno=0;
+	long val = strtol(s, &e, 10);
+	if (errno == ERANGE) return 2;    // overflow
+	if (e != NULL && *e == (char)0) {
+		*n = val;
+		return 0;   // successo 
+	}
+	return 1;   // non e' un numero
 }
 
-double bytesToMb(long bytes){
+double bytesToMb(size_t bytes){
     return (double) bytes/1048576;
 }
-double bytesToKb(long bytes){
+double bytesToKb(size_t bytes){
     return (double) bytes/1024;
 }
-unsigned long MbToBytes(double Mb){
-  return (unsigned long) Mb*1048576;
+size_t MbToBytes(double Mb){
+  	return (size_t) Mb*1048576;
 }
-unsigned long KbToBytes(double Kb){
-  return (unsigned long) Kb*1024;
+size_t KbToBytes(double Kb){
+  	return (size_t) Kb*1024;
 }
 int msleep(unsigned int tms) {
-  return usleep(tms * 1000);
+ 	return usleep(tms * 1000);
+}
+int myRealPath(const char* actaulpath, char** resolvedPath){
+	char abspath[NAME_MAX];
+    memset(&abspath,0,sizeof(abspath));
+    realpath(actaulpath,abspath);
+	if(abspath == NULL){
+        perror("Errore realpath");
+        return 0;
+    }
+    strncpy(*resolvedPath,abspath,strlen(abspath));
+    
+	return 1;
 }

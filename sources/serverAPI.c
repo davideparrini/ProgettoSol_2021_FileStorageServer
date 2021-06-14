@@ -26,25 +26,15 @@ int openConnection(const char* sockname, int msec, const struct timespec abstime
     memset(&sockaddr, 0, sizeof(SA));
     strcpy(sockaddr.sun_path, sockname);
     sockaddr.sun_family = AF_UNIX; 
-    
-    printf("\nFILE DESCRIPTOR CLIENT_FD %d\n",client_fd);//Risultato aspettato : 0 Risultato effettivo : 0
 
-    if(client_fd = socket(AF_UNIX, SOCK_STREAM, 0) == -1){
+    if((client_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1){
         perror("Errore Creazione socket_c");
         exit(EXIT_FAILURE);
     }
-
-    printf("\nFILE DESCRIPTOR CLIENT_FD DOPO CHIAMATA SOCKET() %d\n",client_fd); //Risultato aspettato : NUMERO INTERO, Risultato effettivo : 0
-	int test_fd;
-    if(test_fd = socket(AF_UNIX, SOCK_STREAM, 0) == -1){
-        perror("Errore Creazione ssssc");
-        exit(EXIT_FAILURE);
-    }
-    printf("\nFILE DESCRIPTOR CLIENT_FD %d test_fd : %d\n ENTRAMBE DOPO CHIAMATA socket()\n",client_fd,test_fd);//Risultato aspettato : NUMERO INTERO, NUMERO MAGGIORE DEL PRIMO  Risultato effettivo : 0 , 0
-
     time_t before = time(NULL);
     time_t diff = 0;
     int tentativi = 0;
+    time_t tempo_rimanente;
     while(abstime.tv_sec > diff){
          
         if(connect(client_fd,(struct sockaddr*)&sockaddr,sizeof(sockaddr)) != -1){
@@ -53,9 +43,12 @@ int openConnection(const char* sockname, int msec, const struct timespec abstime
         }
         else{
             if(errno == ENOTCONN || errno == ECONNREFUSED || errno == ENOENT){
-                printf("Non connesso, s_server non è ancora pronto!\nTentativo: %d\n\n",tentativi+1);
+                tentativi++;
+                tempo_rimanente = abstime.tv_sec - diff;
+                printf("Non connesso, il server non è ancora pronto!\nTentativo numero: %d\tCountdown alla chiusura della connessione: %lds\n\n",tentativi,tempo_rimanente);
                 msleep(msec);
                 diff = time(NULL) - before;
+                
             }
             else{
                 PRINT_ERRNO("Openconnection",errno);
@@ -72,12 +65,15 @@ int openConnection(const char* sockname, int msec, const struct timespec abstime
 
 
 int closeConnection(const char* sockname){
-    if(!strcmp(socket_path, sockname)){
+
+    if(strcmp(socket_path, sockname) != 0){
         errno = EBADF;
         return -1;
     }
+   
     if(close(client_fd) == -1){
         errno = EBADF;
+
         return -1;
     }
     printf("Connessione terminata!\n");
@@ -89,29 +85,29 @@ int openFile(const char* pathname, int flags){
     response feedback;
     int b;
 
+
     memset(&r, 0, sizeof(request));
     memset(&feedback, 0, sizeof(response));
     r.flags = flags;
     r.type = OPEN_FILE; 
     r.socket_fd = client_fd;
-    r.file_name = malloc(sizeof(char)* NAME_MAX);
-    memset(&r.file_name,0,sizeof(r.file_name));
+    r.file_name = malloc(sizeof(char) * (NAME_MAX+1));
+    //memset(&r.file_name,0,sizeof(r.file_name));
     memset(&feedback.content,0,sizeof(feedback.content));
-    MY_REALPATH(openFile,pathname,r.file_name);
-
+    myRealPath(pathname,&r.file_name);
+    printf("%s\n",r.file_name);
     if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
         return -1;
     }
-
+    printf("writen fatta!\n");
     free(r.file_name);
 
     if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
         return -1;
-
     }
-
+printf("RICEVUTA RISPOSTA!\n");
     switch (feedback.type){
     
     case OPEN_FILE_SUCCESS:
@@ -135,7 +131,7 @@ int openFile(const char* pathname, int flags){
         return -1;
 
     case NO_SPACE_IN_SERVER:
-        errno = ENOSPC;
+        errno = ENOMEM;
         return -1;  
         
     case FILE_ALREADY_OPENED:
@@ -148,6 +144,10 @@ int openFile(const char* pathname, int flags){
 
     case CANNOT_ACCESS_FILE_LOCKED:
         errno = EPERM;
+        return -1;
+
+    case GENERIC_ERROR:
+		errno = EINTR;
         return -1;
 
     default: break;
@@ -163,14 +163,22 @@ int readFile(const char* pathname, void** buf, size_t* size){
 
     memset(&r,0,sizeof(request));
     r.file_name = malloc(sizeof(char)*NAME_MAX);
-    memset(&r.file_name,0,sizeof(r.file_name));
+    //memset(&r.file_name,0,sizeof(r.file_name));
     memset(&feedback, 0, sizeof(response));
     memset(&feedback.content,0,sizeof(feedback.content));
     r.type = READ_FILE; 
     r.socket_fd = client_fd;
 
     memset(&feedback.content,0,sizeof(feedback.content));
-    MY_REALPATH(readFile,pathname,r.file_name);
+    char abspath[NAME_MAX];
+    memset(&abspath,0,sizeof(abspath));
+    realpath(pathname,abspath);
+    strncpy(r.file_name,abspath,strlen(abspath));
+    if(abspath == NULL){
+        perror("Errore realpath");
+        exit(EXIT_FAILURE);
+    }
+
     if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
         return -1;
@@ -228,7 +236,7 @@ int readNFiles(int N, const char* dirname){
     memset(&feedback.content,0,sizeof(feedback.content));
 
     if(dirname != NULL){
-        MY_REALPATH(writeFile,dirname,r.dirname);
+        myRealPath(dirname,&r.dirname);
     }
     else r.dirname = NULL;
 
@@ -296,9 +304,9 @@ int writeFile(const char* pathname, const char* dirname){
 
     r.type = WRITE_FILE;
     r.socket_fd = client_fd;
-    MY_REALPATH(writeFile,pathname,r.file_name);
+    myRealPath(pathname,&r.file_name);
     if(dirname != NULL){
-        MY_REALPATH(writeFile,dirname,r.dirname);
+        myRealPath(dirname,&r.dirname);
     }
     else{
         r.dirname = NULL;
@@ -328,7 +336,7 @@ int writeFile(const char* pathname, const char* dirname){
             return -1;
 
         case NO_SPACE_IN_SERVER:
-            errno = ENOSPC;
+            errno = ENOMEM;
             return -1;
 
         case WRITE_FILE_SUCCESS:
@@ -362,9 +370,9 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
     r.request_size = size;
     r.type = APPEND_FILE;
     r.socket_fd = client_fd;
-    MY_REALPATH(appendToFile,pathname,r.file_name);
+    myRealPath(pathname,&r.file_name);
     if(dirname != NULL){
-        MY_REALPATH(appendToFile,dirname,r.dirname);
+        myRealPath(dirname,&r.dirname);
     }
     else{
         r.dirname = NULL;
@@ -397,7 +405,11 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
         return -1;
 
     case NO_SPACE_IN_SERVER:
-		errno = ENOSPC;
+		errno = ENOMEM;
+        return -1;
+
+    case GENERIC_ERROR:
+		errno = EINTR;
         return -1;
 
     case APPEND_FILE_SUCCESS:
@@ -424,7 +436,7 @@ int closeFile(const char* pathname){
 
     r.type = CLOSE_FILE;
     r.socket_fd = client_fd;
-    MY_REALPATH(closeFile,pathname,r.file_name);
+    myRealPath(pathname,&r.file_name);
 
     if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
@@ -470,8 +482,8 @@ int removeFile(const char* pathname){
 
     r.type = REMOVE_FILE;
     r.socket_fd = client_fd;
-    MY_REALPATH(appendToFile,pathname,r.file_name);
-   
+    myRealPath(pathname,&r.file_name);
+
     if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
         return -1;

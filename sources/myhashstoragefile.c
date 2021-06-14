@@ -2,12 +2,16 @@
 
 
 file_t* init_file(char *namefile){
+	if(namefile == NULL){
+		fprintf(stderr,"ERRORE initFile, namefile == NULL\n");
+		return NULL;
+	}
 	file_t* new = malloc(sizeof(file_t));
 	new->filename = malloc(sizeof(char)*strlen(namefile)+1);
 	strncpy(new->filename,namefile,strlen(namefile));
 	new->abs_path= malloc(sizeof(char)*NAME_MAX);
 	memset(new->abs_path,0,sizeof(new->abs_path));
-	MY_REALPATH(init_file,namefile,new->abs_path);
+	myRealPath(namefile,&new->abs_path);
 	new->fd = -2;
 	new->modified_flag = 0;
 	new->opened_flag = 0;
@@ -218,18 +222,21 @@ void update_file(hashtable *table,file_t* file){
 }
 
 file_t* research_file(hashtable table,char *namefile){
-	char abs_path[NAME_MAX];
-	MY_REALPATH(research_file,namefile,abs_path);
+	char *abs_path = malloc(sizeof(char) * NAME_MAX);
+	myRealPath(namefile,&abs_path);
 	int h = hash(table,abs_path);
 	file_t* f;
 	if((f = research_file_list(table.cell[h],abs_path)) != NULL){
+		free(abs_path);
 		return f;
 	}
 	else{
 		if((f = research_file_list(*table.cache,abs_path)) != NULL){
+			free(abs_path);
 			return f;
 		}
 	}
+	free(abs_path);
 	return NULL;
 }
 
@@ -265,7 +272,7 @@ int modifying_file(hashtable* table,file_t* f,size_t size_inplus,list* list_reje
 				dupFile_t* to_reject;
 				dupFile_list* temp_reject;
 				init_dupFile_list(temp_reject);
-				unsigned long somma_bytes; //somma bytes della list_reject
+				size_t somma_bytes; //somma bytes della list_reject
 
 				while(!stop && max_files_toVisite > 0 && h < table->len){
 					list temp = table->cell[h];
@@ -396,7 +403,7 @@ int ins_file_server(hashtable* table, file_t *f,list* list_reject){
 			dupFile_t* to_reject;
 			dupFile_list* temp_reject;
 			init_dupFile_list(temp_reject);
-			unsigned long somma_bytes; //somma bytes della list_reject
+			size_t somma_bytes; //somma bytes della list_reject
 			while(!stop && max_files_toVisite > 0 && h < table->len){
 				list temp = table->cell[h];
 				while(temp.head != NULL){
@@ -465,6 +472,8 @@ int ins_file_server(hashtable* table, file_t *f,list* list_reject){
 file_t* remove_file_server(hashtable* table, file_t* f){
     if(f != NULL){
         extract_file_to_server(table,f);
+		close(f->fd);
+		f->fd = -2;
 		return f;
     }
 	return NULL;
