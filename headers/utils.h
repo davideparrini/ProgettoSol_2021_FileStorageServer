@@ -67,49 +67,19 @@ typedef struct S{
 #define PRINT_ERRNO(from_where,err) \
     if(err != 0){ \
         perror(#from_where); \
-        exit(err); \
+        printf("Errno value: %d\n",errno); \
     } 
 
 #define PRINT_OP(nome_operazione,file_riferimento,orario,esito,bytes) \
-    printf("Tipo operazione :%s\nSul file: %s\nOre: %s\nEsito: ",nome_operazione,file_riferimento,ctime(orario) );\
+    printf("Tipo operazione :%s\nSul file: %s\nOre: %sEsito: ",nome_operazione,file_riferimento,ctime(orario) );\
     if(!esito){ \
         printf("Successo!\n"); \
         if(bytes != 0) printf("bytes letti/scritti : %lu\n",(unsigned long)bytes);        \
     }           \
     else printf("Fallimento!\n")
 
-static inline int readn(long fd, void *buf, size_t size) {
-    size_t left = size;
-    int r;
-    char *bufptr = (char*)buf;
-    while(left>0) {
-	if ((r=read((int)fd ,bufptr,left)) == -1) {
-	    if (errno == EINTR) continue;
-	    return -1;
-	}
-	if (r == 0) return 0;   
-        left    -= r;
-	bufptr  += r;
-    }
-    return size;
-}
-
-
-static inline int writen(long fd, void *buf, size_t size) {
-    size_t left = size;
-    int r;
-    char *bufptr = (char*)buf;
-    while(left>0) {
-	if ((r=write((int)fd ,bufptr,left)) == -1) {
-	    if (errno == EINTR) continue;
-	    return -1;
-	}
-	if (r == 0) return 0;  
-        left    -= r;
-	bufptr  += r;
-    }
-    return 1;
-}
+int readn(long fd, void *buf, size_t size);
+int writen(long fd, void *buf, size_t size);
 
 int msleep(unsigned int tms);
 int isNumber(const char* s, long* n);

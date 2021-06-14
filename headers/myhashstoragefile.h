@@ -9,7 +9,6 @@
 typedef struct node{
 	int fd;
 	char* abs_path;
-	char* filename;
 	void* content;
 	size_t dim_bytes;
 	int modified_flag;

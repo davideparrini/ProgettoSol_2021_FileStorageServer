@@ -24,7 +24,20 @@ void push_q(int *client_socket){
     tail->next->next = NULL;
     tail = tail->next;
 }
-
+void removeConnection_q(int *client_socket){
+    node_t *cor = head;
+    node_t *prec = NULL;
+    while(cor != NULL){
+        if(cor->client_socket == *client_socket){
+            if(prec != NULL) prec->next = cor->next;
+            free(cor->client_socket);
+            free(cor);
+            return;
+        }
+        prec = cor;
+        cor = cor->next;
+    }
+}
 int* pop_q(){
     if(head == NULL){
         return NULL; 

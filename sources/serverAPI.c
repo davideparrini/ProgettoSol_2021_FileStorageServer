@@ -88,11 +88,9 @@ int openFile(const char* pathname, int flags){
     memset(&feedback, 0, sizeof(response));
     r.flags = flags;
     r.type = OPEN_FILE; 
-    r.socket_fd = client_fd;
+    //r.socket_fd = client_fd;
     memset(&r.file_name,0,NAME_MAX+1);
-    memset(&feedback.content,0,sizeof(feedback.content));
-    myRealPath(pathname,&r.file_name);
-    printf("%s\n",r.file_name);
+    realpath(pathname,r.file_name);
     if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
         return -1;

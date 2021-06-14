@@ -7,11 +7,9 @@ file_t* init_file(char *namefile){
 		return NULL;
 	}
 	file_t* new = malloc(sizeof(file_t));
-	new->filename = malloc(sizeof(char)*strlen(namefile)+1);
-	strncpy(new->filename,namefile,strlen(namefile));
 	new->abs_path= malloc(sizeof(char)*NAME_MAX);
 	memset(new->abs_path,0,sizeof(new->abs_path));
-	myRealPath(namefile,&new->abs_path);
+	strncpy(new->abs_path,namefile,NAME_MAX+1);
 	new->fd = -2;
 	new->modified_flag = 0;
 	new->opened_flag = 0;
@@ -222,21 +220,16 @@ void update_file(hashtable *table,file_t* file){
 }
 
 file_t* research_file(hashtable table,char *namefile){
-	if(namefile == NULL) printf("SWSSS");
-	else printf("%s\n",namefile);
 	int h = hash(table,namefile);    
 	file_t* f;
 	if((f = research_file_list(table.cell[h],namefile)) != NULL){
-		free(namefile);
 		return f;
 	}
 	else{
 		if((f = research_file_list(*table.cache,namefile)) != NULL){
-			free(namefile);
 			return f;
 		}
 	}
-	free(namefile);
 	return NULL;
 }
 
@@ -507,7 +500,6 @@ void free_file(file_t* file){
 	if(file->content != NULL) free(file->content);
 	if(file->fd > 0) close(file->fd);
 	free(file->abs_path);
-	free(file->filename);
 	free(file);
 }
 
@@ -549,7 +541,7 @@ void print_storageServer(hashtable table){
 			size_t n = table.cell[i].size;
 			list temp = table.cell[i];
 			while(n > 0){
-				printf("%s -> ",temp.head->filename);	
+				printf("%s -> ",temp.head->abs_path);	
 				temp.head = temp.head->next;
 				n--;
 			}

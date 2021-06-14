@@ -46,7 +46,5 @@ int isEmpty_r(){
 }
 void free_request(request* r){
     if(r->buff != NULL) free(r->buff);
-    if(r->dirname != NULL) free(r->dirname);
-    if(r->file_name != NULL) free(r->file_name);
     free(r);
 }
