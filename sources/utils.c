@@ -9,14 +9,11 @@ int readn(long fd, void *buf, size_t size) {
 			if (errno == EINTR) continue;
 			return -1;
 		}
-		printf("numero bytes letti(r) = %d, left %ld\n",r,left);
 		if(r == 0) return 0;       
 		left    -= r;
 		bufptr  += r;
-		printf("left %ld\n",left);
     }
-	printf("size in readn %d\n",(int)size);
-    return (int)size;
+    return size;
 }
 
 int writen(long fd, void *buf, size_t size) {

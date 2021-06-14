@@ -351,14 +351,11 @@ void* manager_thread_function(void* args){
                             request r;
                             memset(&r,0,sizeof(request));
                             pthread_mutex_lock(&mutex);
-                            printf("sizeof r %ld\n",sizeof(request));
-                            if((b = readn(i,&r,sizeof(request)) == -1)){
+                            if((b = readn(i,&r,sizeof(request))) == -1){
                                 perror("Errore readn request");
                                 exit(EXIT_FAILURE);
                             }
-                            printf("Valore di b : %d\n",b);
                             if(b == 0){
-                                printf("ENTROQ\n");
                                 pthread_mutex_lock(&mutex);
                                 close(i);
                                 FD_CLR(i,&set);
@@ -649,7 +646,7 @@ int task_read_file(request* r, response* feedback){
         feedback->type = READ_FILE_SUCCESS;
         res = 1;
         feedback->size = f->dim_bytes;
-        feedback->content = f->content;
+        memcpy(feedback->content,f->content,feedback->size);
     }
     
     return res;
@@ -698,7 +695,7 @@ int task_read_N_file(request* r, response* feedback){
 		}
         h++;   
     }
-    if(r->dirname != NULL){
+    if(!strlen(r->dirname)){
         createFiles_fromDupList_inDir(r->dirname,&d_list);
     }
 
@@ -731,7 +728,7 @@ int task_write_file(request* r, response* feedback){
             if(ins_file_server(&storage,f,&removed_files)){
                 feedback->type = WRITE_FILE_SUCCESS;
                 res = 1;
-                if(r->dirname != NULL){
+                if(!strlen(r->dirname)){
                     createFiles_inDir(r->dirname,&removed_files);
                 }
                 else concatList(&files_rejected,&removed_files);    
