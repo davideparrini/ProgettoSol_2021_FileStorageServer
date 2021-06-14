@@ -38,15 +38,14 @@ size_t KbToBytes(double Kb){
 int msleep(unsigned int tms) {
  	return usleep(tms * 1000);
 }
-int myRealPath(const char* actaulpath, char** resolvedPath){
+int myRealPath(const char* actualpath, char** resolvedPath){
 	char abspath[NAME_MAX];
     memset(&abspath,0,sizeof(abspath));
-    realpath(actaulpath,abspath);
+    realpath(actualpath,abspath);
 	if(abspath == NULL){
         perror("Errore realpath");
         return 0;
     }
     strncpy(*resolvedPath,abspath,strlen(abspath));
-    
 	return 1;
 }

@@ -30,18 +30,19 @@ int main(int argc, char *argv[]){
     socket_path = malloc(sizeof(char)*MAX_SOCKET_PATH);
     memset(socket_path,0,strlen(socket_path ));
     
-    struct timespec timer_connection;
-    time_t msec;
+    struct timespec timer_connection = {20,0};
+    time_t msec = 100;
     if(argc < 2){
         printf("Pochi argomenti!\n");
         exit(EXIT_FAILURE);
     }
+    /*
     printf("Setup client!\n");
     printf("Digitare secondi di attesa di connessione al server:\n");
     scanf("%ld",&timer_connection.tv_sec);
     printf("\nDigitare millisecondi, in caso di mancata connessione, verrà rinviata la richiesta di connessione:\n");
     scanf("%ld",&msec);
-
+*/
     int opt, temp_opt = 0;
     int termina = 0;
     int f = 0, h = 0,p = 0;

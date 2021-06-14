@@ -84,15 +84,12 @@ int openFile(const char* pathname, int flags){
     request r;
     response feedback;
     int b;
-
-
     memset(&r, 0, sizeof(request));
     memset(&feedback, 0, sizeof(response));
     r.flags = flags;
     r.type = OPEN_FILE; 
     r.socket_fd = client_fd;
-    r.file_name = malloc(sizeof(char) * (NAME_MAX+1));
-    //memset(&r.file_name,0,sizeof(r.file_name));
+    memset(&r.file_name,0,NAME_MAX+1);
     memset(&feedback.content,0,sizeof(feedback.content));
     myRealPath(pathname,&r.file_name);
     printf("%s\n",r.file_name);
@@ -100,14 +97,11 @@ int openFile(const char* pathname, int flags){
         errno = EAGAIN;
         return -1;
     }
-    printf("writen fatta!\n");
-    free(r.file_name);
 
     if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
         return -1;
     }
-printf("RICEVUTA RISPOSTA!\n");
     switch (feedback.type){
     
     case OPEN_FILE_SUCCESS:
@@ -162,8 +156,7 @@ int readFile(const char* pathname, void** buf, size_t* size){
     response feedback;
 
     memset(&r,0,sizeof(request));
-    r.file_name = malloc(sizeof(char)*NAME_MAX);
-    //memset(&r.file_name,0,sizeof(r.file_name));
+    memset(&r.file_name,0,NAME_MAX);
     memset(&feedback, 0, sizeof(response));
     memset(&feedback.content,0,sizeof(feedback.content));
     r.type = READ_FILE; 
@@ -183,8 +176,6 @@ int readFile(const char* pathname, void** buf, size_t* size){
         errno = EAGAIN;
         return -1;
     }
-
-    free(r.file_name);
 
     if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
@@ -230,7 +221,6 @@ int readNFiles(int N, const char* dirname){
     request r;
     response feedback;
     memset(&r,0,sizeof(request));
-    r.dirname = malloc(sizeof(char)* NAME_MAX);
     memset(&r.dirname,0,sizeof(r.dirname));
     memset(&feedback, 0, sizeof(response));
     memset(&feedback.content,0,sizeof(feedback.content));
@@ -238,7 +228,7 @@ int readNFiles(int N, const char* dirname){
     if(dirname != NULL){
         myRealPath(dirname,&r.dirname);
     }
-    else r.dirname = NULL;
+    
 
     r.type = READ_N_FILE; 
     r.socket_fd = client_fd;
@@ -249,7 +239,6 @@ int readNFiles(int N, const char* dirname){
         return -1;
     }
 
-    free(r.dirname);
     int n_to_read;
     if(b = readn(client_fd,&n_to_read,sizeof(int)) == -1){
         errno = EAGAIN;
@@ -295,9 +284,7 @@ int writeFile(const char* pathname, const char* dirname){
     request r;
     response feedback;
     memset(&r,0,sizeof(request));
-    r.file_name = malloc(sizeof(char)*NAME_MAX);
     memset(&r.file_name,0,sizeof(r.file_name));
-    r.dirname = malloc(sizeof(char)* NAME_MAX);
     memset(&r.dirname,0,sizeof(r.dirname));
     memset(&feedback, 0, sizeof(response));
     memset(&feedback.content,0,sizeof(feedback.content));
@@ -308,15 +295,11 @@ int writeFile(const char* pathname, const char* dirname){
     if(dirname != NULL){
         myRealPath(dirname,&r.dirname);
     }
-    else{
-        r.dirname = NULL;
-    }
+
     if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
         return -1;
     }
-    free(r.dirname);
-    free(r.file_name);
     
     if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
@@ -357,9 +340,7 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
     request r;
     response feedback;
     memset(&r,0,sizeof(request));
-    r.file_name = malloc(sizeof(char)*NAME_MAX);
     memset(&r.file_name,0,sizeof(r.file_name));
-    r.dirname = malloc(sizeof(char)* NAME_MAX);
     memset(&r.dirname,0,sizeof(r.dirname));
     memset(&feedback, 0, sizeof(response));
     memset(&feedback.content,0,sizeof(feedback.content));
@@ -374,16 +355,11 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
     if(dirname != NULL){
         myRealPath(dirname,&r.dirname);
     }
-    else{
-        r.dirname = NULL;
-    }
+    
     if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
         return -1;
     }
-    free(r.dirname);
-    free(r.file_name);
-    free(r.buff);
 
     if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
@@ -429,7 +405,6 @@ int closeFile(const char* pathname){
     request r;
     response feedback;
     memset(&r,0,sizeof(request));
-    r.file_name = malloc(sizeof(char)*NAME_MAX);
     memset(&r.file_name,0,sizeof(r.file_name));;
     memset(&feedback, 0, sizeof(response));
     memset(&feedback.content,0,sizeof(feedback.content));
@@ -442,7 +417,6 @@ int closeFile(const char* pathname){
         errno = EAGAIN;
         return -1;
     }
-    free(r.file_name);
     
     if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
@@ -475,7 +449,6 @@ int removeFile(const char* pathname){
     request r;
     response feedback;
     memset(&r,0,sizeof(request));
-    r.file_name = malloc(sizeof(char)*NAME_MAX);
     memset(&r.file_name,0,sizeof(r.file_name));;
     memset(&feedback, 0, sizeof(response));
     memset(&feedback.content,0,sizeof(feedback.content));
@@ -488,7 +461,6 @@ int removeFile(const char* pathname){
         errno = EAGAIN;
         return -1;
     }
-    free(r.file_name);
     
     if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;

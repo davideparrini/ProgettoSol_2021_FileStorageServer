@@ -222,21 +222,21 @@ void update_file(hashtable *table,file_t* file){
 }
 
 file_t* research_file(hashtable table,char *namefile){
-	char *abs_path = malloc(sizeof(char) * NAME_MAX);
-	myRealPath(namefile,&abs_path);
-	int h = hash(table,abs_path);
+	if(namefile == NULL) printf("SWSSS");
+	else printf("%s\n",namefile);
+	int h = hash(table,namefile);    
 	file_t* f;
-	if((f = research_file_list(table.cell[h],abs_path)) != NULL){
-		free(abs_path);
+	if((f = research_file_list(table.cell[h],namefile)) != NULL){
+		free(namefile);
 		return f;
 	}
 	else{
-		if((f = research_file_list(*table.cache,abs_path)) != NULL){
-			free(abs_path);
+		if((f = research_file_list(*table.cache,namefile)) != NULL){
+			free(namefile);
 			return f;
 		}
 	}
-	free(abs_path);
+	free(namefile);
 	return NULL;
 }
 

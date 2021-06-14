@@ -65,10 +65,10 @@ void init_Stats();
 
 int main(int argc, char *argv[]){
 
-    printf("Scegliere un file .txt di configurazione: \n");
-    showDirConfig();
-    char c[PATHCONFIG];
-    scanf("%s",c);
+    //printf("Scegliere un file .txt di configurazione: \n");
+    //showDirConfig();
+    char c[PATHCONFIG] = {"config"};
+    //scanf("%s",c);
     setConfigFile(c);
     setUpServer(&configurazione);
     print_serverConfig();
@@ -245,7 +245,6 @@ void* manager_thread_function(void* args){
         perror("Errore Creazione socket_s");
         exit(EXIT_FAILURE);
     }
-    printf("\nFILE DESCRIPTOR %d\n",server_fd);
     memset(&serv_addr, 0, sizeof(SA));
     strncpy(serv_addr.sun_path, configurazione.socket_name,NAME_MAX);
     serv_addr.sun_family = AF_UNIX; 
@@ -273,12 +272,9 @@ void* manager_thread_function(void* args){
     printf("Pronto a ricevere connessioni!\n");
     int termina = 0;
     while(!termina){
-        printf("ATTENDO CONNESSIONE %d\n",c);
-        
         pthread_mutex_lock(&mutex);
         tmpset = set;
         pthread_mutex_unlock(&mutex);
-        printf("fdmax %d\n",fdmax);
         if(select(fdmax+1,&tmpset,NULL,NULL,NULL) == -1){
             perror("Errore in select");
             exit(EXIT_FAILURE);
@@ -294,6 +290,7 @@ void* manager_thread_function(void* args){
                     }
                     printf("Ricevuta connessione! Client_fd: %d\n",client_fd);
                     pthread_mutex_lock(&mutex);
+                    FD_SET(client_fd,&set);
                     push_q(&client_fd);
                     pthread_mutex_unlock(&mutex);
                     if(client_fd > fdmax) fdmax = client_fd;
@@ -301,7 +298,6 @@ void* manager_thread_function(void* args){
                 else{
                     if (i == signal_pipe[0]) {
                         // ricevuto un segnale, esco ed inizio il protocollo di terminazione
-                        printf("Ascolto segnale\n");
                         pthread_mutex_lock(&mutex_pipe_signal);
                         if((b = readn(signal_pipe[0],&sig,sizeof(int)) == -1)){
                             perror("Errore readn pipe");
@@ -329,7 +325,6 @@ void* manager_thread_function(void* args){
                         }   
                     }
                     else{   
-                        printf("Ascolto pipiWM\n");
                         if(i == pipeWorker_manager[0]){
                             int fd_pipe;
                             pthread_mutex_lock(&mutex_pipe_WM);
@@ -344,7 +339,6 @@ void* manager_thread_function(void* args){
                             pthread_mutex_unlock(&mutex_pipe_WM);
                         }
                         else{ //ascolto client-> readn -> metto in coda
-                            printf("Ascolto richiesta\n");
                             request r;
                             memset(&r,0,sizeof(request));
                             pthread_mutex_lock(&mutex);
@@ -357,10 +351,7 @@ void* manager_thread_function(void* args){
                             push_r(&r);
                             pthread_cond_signal(&cond_var);
                             pthread_mutex_unlock(&mutex);
-
                         }
-
-
                     }
                 }   
             }
@@ -412,20 +403,15 @@ static void *sigHandler(void *arg) {
 }
 
 void* worker_thread_function(void* args){
-    int c = 0;
     while (1){
         request *r;
         int b;
         memset(&r,0,sizeof(r));        
         pthread_mutex_lock(&mutex);
-        printf("ESEGUO %d!\n",c);
-        c++;
         while(isEmpty_r()) pthread_cond_wait(&cond_var,&mutex);
         r = pop_r();
-        printf("EssssssssssssssssssssssssssssssSEGUO1212122!\n");
         pthread_mutex_unlock(&mutex);
 
-        
         response feedback;
         do_task(r,&feedback);
         if((b = writen(r->socket_fd,&feedback,sizeof(feedback))) == -1){
@@ -440,15 +426,22 @@ void* worker_thread_function(void* args){
             exit(EXIT_FAILURE);
         }
         pthread_mutex_unlock(&mutex_pipe_WM);
-        free_request(r);
+        //free_request(r);
     }
 }
 
+void printReq(request r){
+    printf("req_type %d\n",r.type);
+    printf("fd %d\n",r.socket_fd);
+    printf("flags %d\n",r.flags);
+    printf("file name %s\n",r.file_name);
 
+}
 void do_task(request* r_from_client,response* feedback){
     //In caso di successo ritorna 1 else 0
     memset(feedback,0,sizeof(response));
-    memset(feedback->content,0,sizeof(feedback->content));
+    //memset(feedback->content,0,sizeof(feedback->content));
+    printReq(*r_from_client);
     switch (r_from_client->type){
 
     case OPEN_FILE:
@@ -513,7 +506,9 @@ void do_task(request* r_from_client,response* feedback){
 int task_openFile(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
     //DA RIGUARDARE O_LOCK
+    printf("sono qua\n");
     file_t* f = research_file(storage,r->file_name);
+        
     int res = 0, b;
     switch (r->flags){
  
