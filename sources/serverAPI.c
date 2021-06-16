@@ -167,17 +167,25 @@ int readFile(const char* pathname, void** buf, size_t* size){
         errno = EAGAIN;
         return -1;
     }
-    if(b = readn(client_fd,&feedback.size,sizeof(size_t)) == -1){
-        errno = EAGAIN;
-        return -1;
+
+    size_t len;
+    if(readn(client_fd,&len,sizeof(size_t)) == -1){
+        perror("GET CONTENT ERROR IN WRITEN");
+		return 0;
     }
-    feedback.content = malloc(feedback.size);
-    memset(&feedback.content,0,sizeof(feedback.content));
-   
+    char content[len];
+    memset(content,0,len);
+
+    if(readn(client_fd,&content,len) == -1){
+        perror("GET CONTENT ERROR IN WRITEN 2");
+		return 0;
+    }
+
     if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
         return -1;
     }
+
     switch (feedback.type){
         
     case FILE_NOT_OPEN:
@@ -205,10 +213,9 @@ int readFile(const char* pathname, void** buf, size_t* size){
     default: break;
     }
     *size = feedback.size;
-    *buf = malloc(feedback.size);
+    *buf = malloc(feedback.size+1);
     memset(*buf, 0, *size);
-    memcpy(*buf,&feedback.content,*size);
-    printf("BUFFF %s\n\n",(char*) *buf);
+    memcpy(*buf,content,feedback.size);
     errno = 0;
     return 0;
 
@@ -247,9 +254,12 @@ int readNFiles(int N, const char* dirname){
         }
         void *buff = malloc(buff_size+1);
         memset(&buff,0,buff_size);
-        if(b = readn(client_fd,&buff,buff_size) == -1){
+        char content[buff_size];
+        memset(content,0,buff_size);
+        if(b = readn(client_fd,&content,buff_size) == -1){
             errno = EAGAIN;
         }
+        memcpy(buff,content,buff_size);
         printf("****Contenuto file %d :****\n%s\n\n",i,(char*) buff);
         free(buff);
         i++;

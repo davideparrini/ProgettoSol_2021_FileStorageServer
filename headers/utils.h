@@ -93,4 +93,7 @@ size_t KbToBytes(double Kb);
 size_t MbToBytes(double Mb);
 int findFile_getAbsPath(const char nomedir[], const char nomefile[],char **resolvedpath);
 int findDir_getAbsPath(const char dirPartenza[], const char dirToSearch[],char **resolvedpath);
+
+int sendContent(int socket_fd,void* content,size_t dim);
+int getContent(int client_fd, void *buff);
 #endif 

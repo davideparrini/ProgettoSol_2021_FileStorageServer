@@ -147,3 +147,43 @@ int findDir_getAbsPath(const char dirPartenza[], const char dirToSearch[],char *
 	closedir(dir);
 	return 1;
 }
+
+
+
+int sendContent(int socket_fd,void* content,size_t dim){
+	//int len = strlen((char*) content);
+	char buffer[dim];
+	memset(buffer,0,dim);
+	memcpy(buffer,content,dim);
+
+	if(writen(socket_fd,&dim,sizeof(size_t)) == -1){
+		errno = EAGAIN;
+		return 0;
+    }
+
+	if(writen(socket_fd,buffer,dim) == -1){
+		perror("SEND CONTENT ERROR IN WRITEN");
+		return 0;
+	}
+	return 1;
+}
+int getContent(int client_fd, void *buff){
+	
+	size_t	size;
+	if(readn(client_fd,&size,sizeof(size_t)) == -1){
+        perror("GET CONTENT ERROR IN WRITEN");
+		return 0;
+    }
+    char content[size];
+    memset(content,0,size);
+
+    if(readn(client_fd,&content,size) == -1){
+        perror("GET CONTENT ERROR IN WRITEN 2");
+		return 0;
+    }
+	buff = malloc(size);
+	memset(buff,0,size);
+	memcpy(buff,content,size);
+	return 1;
+
+}

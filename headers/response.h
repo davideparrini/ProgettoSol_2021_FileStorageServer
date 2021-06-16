@@ -37,6 +37,7 @@ typedef struct s{
     int c; //contatore generico
     void * content;
     size_t size;
+    int len;
 }response;
 
 #endif

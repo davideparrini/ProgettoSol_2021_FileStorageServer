@@ -645,13 +645,9 @@ int task_read_file(request* r, response* feedback){
         feedback->type = READ_FILE_SUCCESS;
         res = 1;
         feedback->size = f->dim_bytes;
-        if(writen(r->socket_fd,&feedback->size,sizeof(size_t)) == -1){
-            errno = EAGAIN;
-            res = 0;
-        }
-        
-        feedback->content = malloc(f->dim_bytes);
-        memcpy(feedback->content,f->content,feedback->size);
+        //feedback->content = malloc(f->dim_bytes);
+        //memcpy(feedback->content,f->content,feedback->size);
+        sendContent(r->socket_fd,f->content,f->dim_bytes);
     }
     
     return res;
