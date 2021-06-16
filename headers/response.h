@@ -26,17 +26,17 @@ typedef enum{
     NO_SPACE_IN_SERVER,
     WRITE_FILE_FAILURE,
     READ_N_FILE_FAILURE,
-    FILE_NOT_OPENED,
+    FILE_NOT_OPEN,
     FILE_NOT_LOCKED
 
 }response_type;
 
 typedef struct s{
     response_type type;
-    size_t size;
     int flags;
     int c; //contatore generico
     void * content;
+    size_t size;
 }response;
 
 #endif

@@ -3,7 +3,8 @@
 #include <myqueueopt.h>
 
 #define MAX_SOCKET_PATH 256
-
+#define PATHCWD "/mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer"
+char testDirPath[NAME_MAX];
 char* socket_path;
 int client_fd;
 static int flag_stamp_op = 0;
@@ -25,8 +26,12 @@ int arg_p();
 int arg_o(char* s);
 int arg_O(int n);
 int arg_a(char* s);
+int arg_C(char* s);
 
 int main(int argc, char *argv[]){
+    char test[NAME_MAX] = {"/test"};
+    strcat(testDirPath,PATHCWD);
+    strcat(testDirPath,test);
     socket_path = malloc(sizeof(char)*MAX_SOCKET_PATH);
     memset(socket_path,0,strlen(socket_path ));
     
@@ -177,28 +182,40 @@ int main(int argc, char *argv[]){
     while(!isEmpty_charq()){
         char_t* c = pop_char();
         switch (c->opt){
-        case 'w':   
-            if(c->next->opt == 'd') arg_w(c->optarg,c->next->optarg);
+        case 'w':
+            if(c->next != NULL){
+                if(c->next->opt == 'D') arg_w(c->optarg,c->next->optarg);
+                else arg_w(c->optarg,NULL);
+            }   
             else arg_w(c->optarg,NULL);
             break; 
 
         case 'W': 
-            if(c->next->opt == 'd') arg_w(c->optarg,c->next->optarg);
-            else arg_w(c->optarg,NULL);
-            break;
+            if(c->next != NULL){
+                if(c->next->opt == 'D') arg_W(c->optarg,c->next->optarg);
+                else arg_W(c->optarg,NULL);
+            }   
+            else arg_W(c->optarg,NULL);
+            break; 
 
         case 'D': 
             break;
 
         case 'r':
-            if(c->next->opt == 'd') arg_r(c->optarg,c->next->optarg);
+            if(c->next != NULL){
+                if(c->next->opt == 'd') arg_r(c->optarg,c->next->optarg);
+                else arg_r(c->optarg,NULL);
+            }   
             else arg_r(c->optarg,NULL);
             break;
 
         case 'R':
-            if(c->next->opt == 'd') arg_R(atoi(c->optarg),c->next->optarg);
-            else arg_R(atoi(c->optarg),NULL); 
-            break;
+            if(c->next != NULL){
+                if(c->next->opt == 'd') arg_R(atoi(c->optarg),c->next->optarg);
+                else arg_R(atoi(c->optarg),NULL);
+            }   
+            else arg_R(atoi(c->optarg),NULL);
+            break; 
 
         case 'd': 
             break;
@@ -225,6 +242,10 @@ int main(int argc, char *argv[]){
 
         case 'a': 
             arg_a(c->optarg);
+            break;
+
+        case 'C': 
+            arg_C(c->optarg);
             break;
 
         default:
@@ -265,7 +286,7 @@ int arg_h(char* s){
 
 int arg_f(char* newsock,char* oldsock){
     strcpy(oldsock,newsock);
-    printf("Ora il socket su cui connettersi è : %s\n",oldsock);
+    printf("Connesso al socket: %s\n",oldsock);
     return 0;
 }
 
@@ -273,24 +294,19 @@ int arg_w(char* s,char* dir_rejectedFile){
     int esito = 0;
     size_t contatore_bytes_scritti = 0;
     char* dirname = strtok(s,",");
-    char absPathdir[NAME_MAX];
-    memset(absPathdir,0,sizeof(absPathdir));
+    char* dirpath = malloc(sizeof(char) * NAME_MAX);
+    findFile_getAbsPath(".",dirname,&dirpath);
     char* nfile = strtok(NULL,",");
-    realpath(dirname,absPathdir);
-    if(absPathdir == NULL){
-        perror("Errore realpath");
-        exit(EXIT_FAILURE); 
-    }
 
     int n, flag_end = 0;
     if(nfile != NULL) n = atoi(nfile);
     else n = 0;
     if(n == 0) flag_end = 1;
 
-    esito = writeFileDir(absPathdir,dir_rejectedFile,n,flag_end,&contatore_bytes_scritti);
+    esito = writeFileDir(dirpath,dir_rejectedFile,n,flag_end,&contatore_bytes_scritti);
     if(flag_stamp_op){
             time_t t_op = time(NULL);
-            PRINT_OP("arg_w","writeNfile",&t_op,esito,contatore_bytes_scritti);
+            PRINT_OP("Writefile arg_w","writeNfile",&t_op,esito,contatore_bytes_scritti);
         } 
 
     return esito;
@@ -340,22 +356,30 @@ int arg_W(char* s,char* dir_rejectedFile){
     char* token = strtok(s,",");
     size_t size = 0;
     struct stat statbuf;
+
+    char* bufdir = malloc(sizeof(char) * NAME_MAX);
+    if(dir_rejectedFile != NULL){
+        findDir_getAbsPath(testDirPath,dir_rejectedFile,&bufdir);
+    }
+
     while(token != NULL){
-        if((esito = writeFile(token,dir_rejectedFile)) == -1){
-            perror("readFile arg_r");
-            esito = -1;
+        char* buf = malloc(sizeof(char) * NAME_MAX);
+        findFile_getAbsPath(testDirPath,token,&buf);
+        if((esito = writeFile(buf,dir_rejectedFile)) == -1){
+            perror("Errore writeFile arg_W");
         }
-        if (stat(token, &statbuf)==-1) {	
-            perror("stat in writeFileDir");
-            esito = -1;
+        if (stat(buf, &statbuf)==-1) {	
+            perror("Errore stat in writeFileDir");
         }
         size += statbuf.st_size;
+        free(buf);
         token = strtok(NULL,",");
     }
     if(flag_stamp_op){
-            time_t t_op = time(NULL);
-            PRINT_OP("arg_W writeFile",s,&t_op,esito,size);
-        }
+        time_t t_op = time(NULL);
+        PRINT_OP("WriteFile arg_W",s,&t_op,esito,size);
+    }
+    free(bufdir);
     free(token);
     return esito;
 }
@@ -364,55 +388,68 @@ int arg_r(char* s,char* dirname){
     char* token = strtok(s,",");
     char *absPath = malloc(sizeof(char) * NAME_MAX);
     memset(&absPath,0, sizeof(absPath) );
-    char* buff;
-    size_t size;
     int esito = 0;
-
+    size_t read_bytes = 0;
+    if(dirname != NULL){
+        findDir_getAbsPath(testDirPath, dirname, &absPath);
+    }
     while(token != NULL && !esito){
-        if((esito = readFile(token,(void**)&buff,&size)) == -1){
-            perror("readFile arg_r");
+        void* buff;
+        size_t size;
+        char* buf = malloc(sizeof(char) * NAME_MAX);
+        findFile_getAbsPath(testDirPath,token,&buf);
+        if((esito = readFile(buf,&buff,&size)) == -1){
+            perror("Errore readFile");
         }
-        printf("*Contenuto File:\n%s\n",buff);  
+        printf("***Contenuto File***:\n%s\n\n",(char*)buff);  
         if(dirname != NULL){
-
-            myRealPath(dirname,&absPath);
-            strcat(absPath,token);
-            FILE* new;
-            
-            if((new = fopen(absPath,"a")) == NULL){
+            char *dup = strndup(absPath,NAME_MAX);
+            strcat(dup,token);
+            int new_fd;            
+            if((new_fd = open(dup,O_WRONLY|O_CREAT|O_EXCL,0777)) == -1){
                 perror("Errore creazione file in arg_r");
                 esito = -1;
             }
             struct stat statbuf;
-            if(stat(token, &statbuf)==-1) {	
+            if(stat(dup, &statbuf)==-1) {	
                 perror("stat in arg_r");
                 esito = -1;
             }
-            if(!statbuf.st_size) fputs(buff,new);
+            if(!statbuf.st_size){
+                if( write(new_fd,buff,size) == -1 ){
+                    perror("Errore scrittura file in arg_r");
+                }
+            }
             else printf("File %s già presente nella dir %s\n",token,dirname);
-            
-            fclose(new);
-        }    
-        memset(buff,0,size);
-        memset(&absPath,0,sizeof(absPath));
+            free(dup);
+            close(new_fd);
+        }
+        read_bytes += size;
+        size = 0;   
+        free(buf); 
+        free(buff);
+        
         token = strtok(NULL,",");
     }
     free(absPath); 
     free(token);
-    free(buff);
     if(flag_stamp_op){
         time_t t_op = time(NULL);
-        PRINT_OP("readFile",s,&t_op,esito,size);
+        PRINT_OP("readFile",s,&t_op,esito,read_bytes);
     } 
     return esito;
 }
 int arg_R(int n, char* dirname){
     int termina = 0,esito = 0,nzero = 0;
+    char* bufdir = malloc(sizeof(char) * NAME_MAX);
     if(nzero == 0) nzero = 1;
     while(!termina && n > 0){
 
     }
-    if((esito = readNFiles(n,dirname)) == -1){
+    if(dirname != NULL){
+        findFile_getAbsPath(testDirPath,dirname,&bufdir);
+    }
+    if((esito = readNFiles(n,bufdir)) == -1){
         perror("readNFile arg_r");
     }
     if(flag_stamp_op){
@@ -420,6 +457,7 @@ int arg_R(int n, char* dirname){
         size_t size = 0;
         PRINT_OP("arg_R","N file",&t_op,esito,size);
     } 
+    free(bufdir);
     return esito;
 }
 
@@ -432,7 +470,9 @@ int arg_c(char* s){
     int esito = 0;
     char* token = strtok(s,",");
     while(token != NULL && !esito){
-        if((esito = removeFile(token)) == -1){
+        char* buf = malloc(sizeof(char) * NAME_MAX);
+        findDir_getAbsPath(testDirPath,token,&buf);
+        if((esito = removeFile(buf)) == -1){
             perror("Errore removeFile");
         }
         if(flag_stamp_op){
@@ -441,6 +481,7 @@ int arg_c(char* s){
             PRINT_OP("removeFile",token,&t_op,esito,size);
         } 
         token = strtok(NULL,",");
+        free(buf);
     }
     return esito; 
 }
@@ -460,13 +501,16 @@ int arg_p(){
 int arg_o(char* s){
     int esito = 0,o_flag;
     char* flag = strtok(s,":");
+
     if(!strcmp(flag,"O_CREATE")) o_flag = O_CREATE;
     else if(!strcmp(flag,"O_LOCK")) o_flag = O_LOCK;
-    else if(!strcmp(flag,"O_CREATE|O_LOCK")) o_flag = O_CREATE|O_LOCK;
+    else if(!strcmp(flag,"O_CREATE-O_LOCK")) o_flag = O_CREATE|O_LOCK;
     else if(!strcmp(flag,"O_NOFLAGS")) o_flag = O_NOFLAGS;
     char* token = strtok(NULL,",");
-    while(token != NULL && !esito){
-        if((esito = openFile(token,o_flag)) == -1){
+    while(token != NULL){
+        char* buf = malloc(sizeof(char) * NAME_MAX);
+        findFile_getAbsPath(testDirPath,token,&buf);
+        if((esito = openFile(buf,o_flag)) == -1){
             perror("Errore openFile");
         }
         if(flag_stamp_op){
@@ -474,6 +518,7 @@ int arg_o(char* s){
             size_t size = 0;
             PRINT_OP("openFile",token,&t_op,esito,size);
         } 
+        free(buf);
         token = strtok(NULL,",");
     }
     return esito; 
@@ -489,8 +534,12 @@ int arg_O(int n){
 
 int arg_a(char* s){
     int esito = 0;
-    char* token = strtok(s," : ");
+    char* token = strtok(s,":");
     char* content = strtok(NULL,"^?^?^""£_");
+    char* buffer = malloc(sizeof(char) * NAME_MAX);
+
+    findFile_getAbsPath(testDirPath,token,&buffer);
+
     if(appendToFile(token,(void*)content,sizeof(content),NULL) == -1){
         perror("Errore appendToFile");
         esito = -1;
@@ -499,6 +548,28 @@ int arg_a(char* s){
         time_t t_op = time(NULL);
         PRINT_OP("appendToFile",token,&t_op,esito,sizeof(content));
     } 
+    free(buffer);
+    free(token);
+    free(content);
+    return esito; 
+}
 
+int arg_C(char* s){
+    int esito = 0;
+    char* token = strtok(s,",");
+    while(token != NULL && !esito){
+        char* buf = malloc(sizeof(char) * NAME_MAX);
+        findDir_getAbsPath(testDirPath,token,&buf);
+        if((esito = closeFile(buf)) == -1){
+            perror("Errore closeFile");
+        }
+        if(flag_stamp_op){
+            time_t t_op = time(NULL);
+            size_t size = 0;
+            PRINT_OP("closeFile",token,&t_op,esito,size);
+        } 
+        token = strtok(NULL,",");
+        free(buf);
+    }
     return esito; 
 }

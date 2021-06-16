@@ -68,14 +68,82 @@ size_t KbToBytes(double Kb){
 int msleep(unsigned int tms) {
  	return usleep(tms * 1000);
 }
-int myRealPath(const char* actualpath, char** resolvedPath){
-	char abspath[NAME_MAX];
-    memset(&abspath,0,sizeof(abspath));
-    realpath(actualpath,abspath);
-	if(abspath == NULL){
-        perror("Errore realpath");
-        return 0;
-    }
-    strncpy(*resolvedPath,abspath,strlen(abspath));
+
+int findFile_getAbsPath(const char dirPartenza[], const char nomefile[],char** resolvedpath){
+	if(chdir(dirPartenza) == -1){
+		printf("CHDRI ERR\n");
+		return 0;
+	}
+	DIR* dir;
+	if((dir = opendir(".")) == NULL){
+		perror("errore apertura dir");
+		return -1;
+	}
+	struct dirent *file;
+	while( (errno=0, file = readdir(dir) ) != NULL) {
+    	struct stat statbuf;
+    	if (stat(file->d_name, &statbuf)==-1) {
+			return -1;
+		}
+		if(S_ISDIR(statbuf.st_mode)){
+			if(!isdot(file->d_name)){
+				if(findFile_getAbsPath(file->d_name,nomefile,resolvedpath) != 0){
+					if(chdir("..") == -1){
+						perror("errore apertura dir padre");
+						return -1;
+					}
+				}
+			}
+		}
+		else{
+			if(!strncmp(file->d_name, nomefile, strlen(nomefile))){
+				getcwd(*resolvedpath,NAME_MAX);
+				strncat(*resolvedpath,"/",2);
+				strncat(*resolvedpath,nomefile,NAME_MAX);
+			}
+		}
+	}
+	PRINT_ERRNO(readdir,errno);
+	closedir(dir);
+	return 1;
+}
+
+
+int findDir_getAbsPath(const char dirPartenza[], const char dirToSearch[],char **resolvedpath){
+	if(chdir(dirPartenza) == -1){
+		return 0;
+	}
+	DIR* dir;
+	if((dir = opendir(".")) == NULL){
+		perror("errore apertura dir");
+		return -1;
+	}
+	struct dirent *file;
+	while( (errno=0, file = readdir(dir) ) != NULL) {
+    	struct stat statbuf;
+    	if (stat(file->d_name, &statbuf)==-1) {
+			return -1;
+		}
+		if(S_ISDIR(statbuf.st_mode)){
+			if(!isdot(file->d_name)){
+				if(!strncmp(file->d_name, dirToSearch, strlen(dirToSearch))){
+					getcwd(*resolvedpath,NAME_MAX);
+					strncat(*resolvedpath,"/",2);
+					strncat(*resolvedpath,dirToSearch,NAME_MAX);
+					break;
+				}
+				else{
+					if(findDir_getAbsPath(file->d_name,dirToSearch,resolvedpath) != 0){
+						if(chdir("..") == -1){
+							perror("errore apertura dir padre");
+							return -1;
+						}
+					}
+				}
+			}	
+		}
+	}
+	PRINT_ERRNO(readdir,errno);
+	closedir(dir);
 	return 1;
 }

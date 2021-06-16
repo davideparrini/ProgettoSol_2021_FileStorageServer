@@ -103,7 +103,7 @@ int main(int argc, char *argv[]){
 	    cleanup();
         exit(EXIT_FAILURE); 
     } 
-
+    
     if ((pipe(signal_pipe))==-1) {
 	    perror("signalpipe");
         cleanup();
@@ -350,14 +350,14 @@ void* manager_thread_function(void* args){
                         else{ //ascolto client-> readn -> metto in coda
                             request r;
                             memset(&r,0,sizeof(request));
-                            pthread_mutex_lock(&mutex);
+                            pthread_mutex_lock(&mutex_pipe_WM);
                             if((b = readn(i,&r,sizeof(request))) == -1){
                                 perror("Errore readn request");
                                 exit(EXIT_FAILURE);
                             }
                             if(b == 0){
-                                pthread_mutex_lock(&mutex);
                                 close(i);
+                                pthread_mutex_lock(&mutex);
                                 FD_CLR(i,&set);
                                 if(i == fdmax) fdmax = update_fdmax(set,fdmax);
                                 removeConnection_q(&i);
@@ -369,8 +369,8 @@ void* manager_thread_function(void* args){
                                 if(i == fdmax) fdmax = update_fdmax(set,fdmax);
                                 push_r(&r);
                                 pthread_cond_signal(&cond_var);
-                                pthread_mutex_unlock(&mutex);
                             }
+                            pthread_mutex_unlock(&mutex_pipe_WM);
                         }
                     }
                 }   
@@ -510,7 +510,7 @@ void do_task(request* r_from_client,response* feedback){
     default:
         break;
     }
-    
+   // print_storageServer(storage);
     PRINT_ERRNO("do task",errno);
 
 }
@@ -521,14 +521,14 @@ int task_openFile(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
     //DA RIGUARDARE O_LOCK
 
-    file_t* f = research_file(storage,r->file_name);
+    file_t* f = research_file(storage,r->pathfile);
     int res = 0;
     switch (r->flags){
  
     case O_CREATE :
         if(f == NULL){
-            f = init_file(r->file_name);
-            f->opened_flag = 1;
+            f = init_file(r->pathfile);
+            f->open_flag = 1;
             f->o_create_flag = 1;
             if(!init_file_inServer(&storage,f,&files_rejected)){
                 feedback->type = NO_SPACE_IN_SERVER;
@@ -554,8 +554,8 @@ int task_openFile(request* r, response* feedback){
         else{
             if(f->locked_flag == 1) feedback->type = CANNOT_ACCESS_FILE_LOCKED;
             else{
-                if(f->opened_flag != 1){
-                    f->opened_flag = 1;
+                if(f->open_flag != 1){
+                    f->open_flag = 1;
                     feedback->type = O_LOCK_SUCCESS;
                     res = 1;
                     if((f->fd = open(f->abs_path, O_RDWR)) == -1){
@@ -575,8 +575,8 @@ int task_openFile(request* r, response* feedback){
 
     case O_CREATE|O_LOCK :
         if(f == NULL){
-            f = init_file(r->file_name);
-            f->opened_flag = 1;
+            f = init_file(r->pathfile);
+            f->open_flag = 1;
             f->o_create_flag = 1;
             f->locked_flag = 1;
             if(!init_file_inServer(&storage,f,&files_rejected)){
@@ -603,8 +603,8 @@ int task_openFile(request* r, response* feedback){
         else{
             if(f->locked_flag == 1) feedback->type = CANNOT_ACCESS_FILE_LOCKED;
             else{
-                if(f->opened_flag != 1){
-                    f->opened_flag = 1;
+                if(f->open_flag != 1){
+                    f->open_flag = 1;
                     storage.n_files_free++;  
                     res = 1;
                     if((f->fd = open(f->abs_path, O_RDWR)) == -1){
@@ -631,21 +631,26 @@ int task_openFile(request* r, response* feedback){
 int task_read_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
     int res = 0;
-    file_t* f = research_file(storage,r->file_name);
+    file_t* f = research_file(storage,r->pathfile);
     if(f == NULL) feedback->type = FILE_NOT_EXIST;
     else{
-        if(f->locked_flag == 1){
+        if(f->locked_flag){
             feedback->type = CANNOT_ACCESS_FILE_LOCKED;
             return res;
         } 
-        if(f->opened_flag != 0){
-            feedback->type = FILE_NOT_OPENED;
+        if(!f->open_flag){
+            feedback->type = FILE_NOT_OPEN;
             return res;
         } 
-
         feedback->type = READ_FILE_SUCCESS;
         res = 1;
         feedback->size = f->dim_bytes;
+        if(writen(r->socket_fd,&feedback->size,sizeof(size_t)) == -1){
+            errno = EAGAIN;
+            res = 0;
+        }
+        
+        feedback->content = malloc(f->dim_bytes);
         memcpy(feedback->content,f->content,feedback->size);
     }
     
@@ -669,7 +674,7 @@ int task_read_N_file(request* r, response* feedback){
         if(storage.cell[h].head != NULL){
 			list temp = storage.cell[h];
 			while(temp.head != NULL && n_to_read > 0){
-                if(temp.head->opened_flag == 1 && temp.head->locked_flag == 0){
+                if(temp.head->open_flag == 1 && temp.head->locked_flag == 0){
                     void *buff = malloc(temp.head->dim_bytes + 1);
                     memset(&buff,0,temp.head->dim_bytes);
                     int l;
@@ -695,8 +700,8 @@ int task_read_N_file(request* r, response* feedback){
 		}
         h++;   
     }
-    if(!strlen(r->dirname)){
-        createFiles_fromDupList_inDir(r->dirname,&d_list);
+    if(!strlen(r->dirpath)){
+        createFiles_fromDupList_inDir(r->dirpath,&d_list);
     }
 
     if(contatore_file_letti != r->c || n_to_read != 0){
@@ -714,22 +719,21 @@ int task_read_N_file(request* r, response* feedback){
 int task_write_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 
     int res = 0;
-    file_t* f = research_file(storage,r->file_name);
+    file_t* f = research_file(storage,r->pathfile);
     if(f == NULL){
         feedback->type = FILE_NOT_EXIST;
     }
     else{
-        if(!f->locked_flag || !f->opened_flag || !f->o_create_flag){
+        if(!f->locked_flag || !f->open_flag || !f->o_create_flag){
             feedback->type = WRITE_FILE_FAILURE;
         }
         else{
-            //////////////////////////////////DDDDDDDDDDAAAAAAAAA RIGUARDARE!!!!!!!!
             list removed_files;
             if(ins_file_server(&storage,f,&removed_files)){
                 feedback->type = WRITE_FILE_SUCCESS;
                 res = 1;
-                if(!strlen(r->dirname)){
-                    createFiles_inDir(r->dirname,&removed_files);
+                if(strlen(r->dirpath) != 0){
+                    createFiles_inDir(r->dirpath,&removed_files);
                 }
                 else concatList(&files_rejected,&removed_files);    
             }
@@ -742,7 +746,7 @@ int task_write_file(request* r, response* feedback){
 int task_append_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
     int res = 0;
-    file_t* file = research_file(storage,r->file_name);
+    file_t* file = research_file(storage,r->pathfile);
     if(file == NULL){
         feedback->type = FILE_NOT_EXIST;
     }
@@ -752,8 +756,8 @@ int task_append_file(request* r, response* feedback){
             return res;
         }
 
-        if(file->opened_flag != 1){
-            feedback->type = FILE_NOT_OPENED;
+        if(file->open_flag != 1){
+            feedback->type = FILE_NOT_OPEN;
             return res;
         }
 
@@ -807,16 +811,16 @@ int task_lock_file(request* r, response* feedback){
 int task_close_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
     int res = 0;
-    file_t* file = research_file(storage,r->file_name);
+    file_t* file = research_file(storage,r->pathfile);
     if(file == NULL){
         feedback->type = FILE_NOT_EXIST;
     }
     else{    
-        if(file->opened_flag == 0){
-            feedback->type = FILE_NOT_OPENED;
+        if(file->open_flag == 0){
+            feedback->type = FILE_NOT_OPEN;
             return res;
         }
-        file->opened_flag = 0;
+        file->open_flag = 0;
         feedback->type = CLOSE_FILE_SUCCESS;
         res = 1;
         if(close(file->fd) == -1){
@@ -833,7 +837,7 @@ int task_close_file(request* r, response* feedback){
 int task_remove_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
     int res = 0;
-    file_t* file = research_file(storage,r->file_name);
+    file_t* file = research_file(storage,r->pathfile);
     if(file == NULL){
         feedback->type = FILE_NOT_EXIST;
     }
@@ -934,7 +938,7 @@ void createFiles_inDir(char* dirname,list* l){
   //crea file nella directory dirname, dirname deve essere il path assoluto della directory
   //i file sono passati dalla list l
     char* s_dir = strndup(dirname,strlen(dirname));
-    strcat(s_dir,"/");
+    strncat(s_dir,"/",2);
     while(!isEmpty(*l)){
         file_t *temp = l->head;
         char* s_file = strndup(temp->abs_path,strlen(temp->abs_path));
@@ -944,7 +948,7 @@ void createFiles_inDir(char* dirname,list* l){
         free(namefile);
         void* content = malloc(temp->dim_bytes);
         int fd_new,lung;
-        if((fd_new = open(newfile_path,O_WRONLY|O_CREAT|O_TRUNC)) == -1){
+        if((fd_new = open(newfile_path,O_WRONLY|O_CREAT|O_TRUNC,0777)) == -1){
             perror("Errore apertura in createFiles_fromDupList_inDir");
             exit(EXIT_FAILURE);
         }
@@ -963,7 +967,6 @@ void createFiles_inDir(char* dirname,list* l){
         free(content);
         l->head = l->head->next;
         l->size--;
-        free_file(temp);
     }
   free(s_dir);
 

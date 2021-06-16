@@ -71,12 +71,13 @@ typedef struct S{
     } 
 
 #define PRINT_OP(nome_operazione,file_riferimento,orario,esito,bytes) \
-    printf("Tipo operazione :%s\nSul file: %s\nOre: %sEsito: ",nome_operazione,file_riferimento,ctime(orario) );\
+    printf("Tipo operazione: %s\nSul file: %s\nData/Ora: %sEsito: ",nome_operazione,file_riferimento,ctime(orario) );\
     if(!esito){ \
         printf("Successo!\n"); \
-        if(bytes != 0) printf("bytes letti/scritti : %lu\n",(unsigned long)bytes);        \
+        if(bytes != 0) printf("bytes letti/scritti : %lubytes\n\n",(unsigned long)bytes);        \
+        else printf("\n");        \
     }           \
-    else printf("Fallimento!\n")
+    else printf("Fallimento!\n\n")
 
 int readn(long fd, void *buf, size_t size);
 int writen(long fd, void *buf, size_t size);
@@ -85,9 +86,11 @@ int msleep(unsigned int tms);
 int isNumber(const char* s, long* n);
 int isdot(const char dir[]);
 
-int myRealPath(const char * actaulpath, char** resolvedPath);
+
 double bytesToKb(size_t bytes);
 double bytesToMb(size_t bytes);
 size_t KbToBytes(double Kb);
 size_t MbToBytes(double Mb);
+int findFile_getAbsPath(const char nomedir[], const char nomefile[],char **resolvedpath);
+int findDir_getAbsPath(const char dirPartenza[], const char dirToSearch[],char **resolvedpath);
 #endif 

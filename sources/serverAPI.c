@@ -38,7 +38,7 @@ int openConnection(const char* sockname, int msec, const struct timespec abstime
     while(abstime.tv_sec > diff){
          
         if(connect(client_fd,(struct sockaddr*)&sockaddr,sizeof(sockaddr)) != -1){
-            printf("Connesso al server!\n");
+            printf("Connesso al server!\n\n");
             return 0;
         }
         else{
@@ -88,9 +88,9 @@ int openFile(const char* pathname, int flags){
     memset(&feedback, 0, sizeof(response));
     r.flags = flags;
     r.type = OPEN_FILE; 
-    //r.socket_fd = client_fd;
-    memset(&r.file_name,0,NAME_MAX+1);
-    realpath(pathname,r.file_name);
+    memset(&r.pathfile,0,NAME_MAX);
+    strncpy(r.pathfile,pathname,NAME_MAX);
+
     if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
         return -1;
@@ -107,15 +107,15 @@ int openFile(const char* pathname, int flags){
         break;     
 
     case O_CREATE_SUCCESS:
-        printf("File ' %s ' creato con successo\n",pathname);
+        printf("File ' %s ' o_creato con successo\n",pathname);
         break;                 
 
     case LOCK_FILE_SUCCESS:
-        printf("File ' %s '  locked con successo\n",pathname);
+        printf("File ' %s '  o_locked con successo\n",pathname);
         break;       
 
      case O_CREATE_LOCK_SUCCESS:
-        printf("File ' %s '  creato/locked con successo\n",pathname);
+        printf("File ' %s '  o_creato/locked con successo\n",pathname);
         break;       
 
     case O_CREATE_NOT_SPECIFIED_AND_FILE_NEXIST:
@@ -126,9 +126,9 @@ int openFile(const char* pathname, int flags){
         errno = ENOMEM;
         return -1;  
         
-    case FILE_ALREADY_OPENED:
-        errno = 0;
-        return 0;
+    case FILE_ALREADY_OPENED:        
+        printf("File ' %s ' è già aperto\n",pathname);
+        break;
 
     case FILE_ALREADY_EXIST:
         errno = EEXIST;
@@ -143,46 +143,44 @@ int openFile(const char* pathname, int flags){
         return -1;
 
     default: break;
+
     }
+
     errno = 0; 
     return 0;
-
 }
+
 int readFile(const char* pathname, void** buf, size_t* size){
     int b;
     request r;
     response feedback;
 
     memset(&r,0,sizeof(request));
-    memset(&r.file_name,0,NAME_MAX);
+    memset(&r.pathfile,0,NAME_MAX);
     memset(&feedback, 0, sizeof(response));
-    memset(&feedback.content,0,sizeof(feedback.content));
     r.type = READ_FILE; 
-    r.socket_fd = client_fd;
 
-    memset(&feedback.content,0,sizeof(feedback.content));
-    char abspath[NAME_MAX];
-    memset(&abspath,0,sizeof(abspath));
-    realpath(pathname,abspath);
-    strncpy(r.file_name,abspath,strlen(abspath));
-    if(abspath == NULL){
-        perror("Errore realpath");
-        exit(EXIT_FAILURE);
-    }
+    strncpy(r.pathfile,pathname,NAME_MAX);
+
 
     if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
         return -1;
     }
-
+    if(b = readn(client_fd,&feedback.size,sizeof(size_t)) == -1){
+        errno = EAGAIN;
+        return -1;
+    }
+    feedback.content = malloc(feedback.size);
+    memset(&feedback.content,0,sizeof(feedback.content));
+   
     if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
         return -1;
     }
-
     switch (feedback.type){
         
-    case FILE_NOT_OPENED:
+    case FILE_NOT_OPEN:
         *buf = NULL;
         *size = 0;
         errno = EACCES;
@@ -207,9 +205,10 @@ int readFile(const char* pathname, void** buf, size_t* size){
     default: break;
     }
     *size = feedback.size;
-    *buf = malloc(feedback.size+1);
-    memset(buf, 0, feedback.size+1);
+    *buf = malloc(feedback.size);
+    memset(*buf, 0, *size);
     memcpy(*buf,&feedback.content,*size);
+    printf("BUFFF %s\n\n",(char*) *buf);
     errno = 0;
     return 0;
 
@@ -219,17 +218,15 @@ int readNFiles(int N, const char* dirname){
     request r;
     response feedback;
     memset(&r,0,sizeof(request));
-    memset(&r.dirname,0,sizeof(r.dirname));
+    memset(&r.dirpath,0,sizeof(r.dirpath));
     memset(&feedback, 0, sizeof(response));
     memset(&feedback.content,0,sizeof(feedback.content));
 
     if(dirname != NULL){
-        myRealPath(dirname,&r.dirname);
+        strncpy(r.dirpath,dirname,NAME_MAX);
     }
     
-
     r.type = READ_N_FILE; 
-    r.socket_fd = client_fd;
     r.c = N;
 
     if(b = writen(client_fd,&r,sizeof(r)) == -1){
@@ -282,16 +279,16 @@ int writeFile(const char* pathname, const char* dirname){
     request r;
     response feedback;
     memset(&r,0,sizeof(request));
-    memset(&r.file_name,0,sizeof(r.file_name));
-    memset(&r.dirname,0,sizeof(r.dirname));
+    memset(&r.pathfile,0,sizeof(r.pathfile));
+    memset(&r.dirpath,0,sizeof(r.dirpath));
     memset(&feedback, 0, sizeof(response));
     memset(&feedback.content,0,sizeof(feedback.content));
 
     r.type = WRITE_FILE;
-    r.socket_fd = client_fd;
-    myRealPath(pathname,&r.file_name);
+    strncpy(r.pathfile,pathname,NAME_MAX);
+   
     if(dirname != NULL){
-        myRealPath(dirname,&r.dirname);
+        strncpy(r.dirpath,dirname,NAME_MAX);
     }
 
     if(b = writen(client_fd,&r,sizeof(r)) == -1){
@@ -303,31 +300,29 @@ int writeFile(const char* pathname, const char* dirname){
         errno = EAGAIN;
         return -1;
     }
-    //se il flag della risposta del server è settato a 1, significa
-    //che è stata passata in precedenza openFile(pathname, O_CREATE| O_LOCK)
-    else{
-        switch (feedback.type){
+
+    switch (feedback.type){
+    
+    case WRITE_FILE_FAILURE:
+        errno = EPERM;
+        return -1;
+
+    case FILE_NOT_EXIST:
+        errno = ENOENT;
+        return -1;
+
+    case NO_SPACE_IN_SERVER:
+        errno = ENOMEM;
+        return -1;
+
+    case WRITE_FILE_SUCCESS:
+        printf("Write_file ' %s ' ha avuto successo\n",pathname);
+        break;
+            
+    default:
+        break;
+    } 
         
-        case WRITE_FILE_FAILURE:
-            errno = EPERM;
-            return -1;
-
-        case FILE_NOT_EXIST:
-            errno = ENOENT;
-            return -1;
-
-        case NO_SPACE_IN_SERVER:
-            errno = ENOMEM;
-            return -1;
-
-        case WRITE_FILE_SUCCESS:
-            printf("Write_file ' %s ' ha avuto successo\n",pathname);
-            break;
-                
-        default:
-            break;
-        } 
-    }    
     errno = 0;
     return 0;
 }
@@ -338,8 +333,8 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
     request r;
     response feedback;
     memset(&r,0,sizeof(request));
-    memset(&r.file_name,0,sizeof(r.file_name));
-    memset(&r.dirname,0,sizeof(r.dirname));
+    memset(&r.pathfile,0,sizeof(r.pathfile));
+    memset(&r.dirpath,0,sizeof(r.dirpath));
     memset(&feedback, 0, sizeof(response));
     memset(&feedback.content,0,sizeof(feedback.content));
     r.buff = malloc(size);
@@ -348,10 +343,10 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
     r.buff = buf;
     r.request_size = size;
     r.type = APPEND_FILE;
-    r.socket_fd = client_fd;
-    myRealPath(pathname,&r.file_name);
+    strncpy(r.pathfile,pathname,NAME_MAX);
+    
     if(dirname != NULL){
-        myRealPath(dirname,&r.dirname);
+        strncpy(r.dirpath,dirname,NAME_MAX);
     }
     
     if(b = writen(client_fd,&r,sizeof(r)) == -1){
@@ -366,7 +361,7 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
 
     switch (feedback.type){
         
-    case FILE_NOT_OPENED:
+    case FILE_NOT_OPEN:
 		errno = EACCES;
         return -1;
 
@@ -403,13 +398,14 @@ int closeFile(const char* pathname){
     request r;
     response feedback;
     memset(&r,0,sizeof(request));
-    memset(&r.file_name,0,sizeof(r.file_name));;
+    memset(&r.pathfile,0,sizeof(r.pathfile));;
     memset(&feedback, 0, sizeof(response));
     memset(&feedback.content,0,sizeof(feedback.content));
 
     r.type = CLOSE_FILE;
-    r.socket_fd = client_fd;
-    myRealPath(pathname,&r.file_name);
+
+    strncpy(r.pathfile,pathname,NAME_MAX);
+
 
     if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
@@ -422,7 +418,7 @@ int closeFile(const char* pathname){
     }
     switch (feedback.type){
         
-    case FILE_NOT_OPENED:
+    case FILE_NOT_OPEN:
 		errno = 0;
         return 0;
 
@@ -447,13 +443,12 @@ int removeFile(const char* pathname){
     request r;
     response feedback;
     memset(&r,0,sizeof(request));
-    memset(&r.file_name,0,sizeof(r.file_name));;
+    memset(&r.pathfile,0,sizeof(r.pathfile));;
     memset(&feedback, 0, sizeof(response));
     memset(&feedback.content,0,sizeof(feedback.content));
 
     r.type = REMOVE_FILE;
-    r.socket_fd = client_fd;
-    myRealPath(pathname,&r.file_name);
+    strncpy(r.pathfile,pathname,NAME_MAX);
 
     if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;

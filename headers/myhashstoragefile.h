@@ -12,7 +12,7 @@ typedef struct node{
 	void* content;
 	size_t dim_bytes;
 	int modified_flag;
-	int opened_flag;
+	int open_flag;
 	int o_create_flag;
 	int locked_flag;
 	int inCache_flag;

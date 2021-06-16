@@ -9,10 +9,10 @@ file_t* init_file(char *namefile){
 	file_t* new = malloc(sizeof(file_t));
 	new->abs_path= malloc(sizeof(char)*NAME_MAX);
 	memset(new->abs_path,0,sizeof(new->abs_path));
-	strncpy(new->abs_path,namefile,NAME_MAX+1);
+	strncpy(new->abs_path,namefile,NAME_MAX);
 	new->fd = -2;
 	new->modified_flag = 0;
-	new->opened_flag = 0;
+	new->open_flag = 0;
 	new->o_create_flag = 0;
 	new->locked_flag = 0;
 	new->inCache_flag = 0;
@@ -37,6 +37,9 @@ int writeContentFile(file_t* f){
 		perror("lettura file in writeContentFile");
 		return 0;
 	}
+	
+	f->o_create_flag = 0;
+	f->locked_flag = 0;
 	f->dim_bytes = s.st_size;
 	return 1;
 }
@@ -183,7 +186,7 @@ void extract_file_to_server(hashtable *table,file_t* file){
 		table->n_file_modified--;
 		file->modified_flag = 0;
 	}
-	if(file->opened_flag == 1 && file->locked_flag == 0) table->n_files_free--;
+	if(file->open_flag == 1 && file->locked_flag == 0) table->n_files_free--;
 	table->n_file--;
 	file->inCache_flag = 0;
 	
@@ -220,6 +223,10 @@ void update_file(hashtable *table,file_t* file){
 }
 
 file_t* research_file(hashtable table,char *namefile){
+	if(namefile == NULL){
+		printf("Non è stato passato bene namefile in researchFile\n\n");
+		return NULL;
+	}	
 	int h = hash(table,namefile);    
 	file_t* f;
 	if((f = research_file_list(table.cell[h],namefile)) != NULL){
@@ -293,7 +300,7 @@ int modifying_file(hashtable* table,file_t* f,size_t size_inplus,list* list_reje
 					else{ 
 						while(table->memory_capacity > table->memory_used + size_inplus){
 							file_t* to_reject = pop_list(table->cache);
-							if(to_reject->opened_flag == 1 && to_reject->locked_flag == 0) table->n_files_free--;
+							if(to_reject->open_flag == 1 && to_reject->locked_flag == 0) table->n_files_free--;
 							table->n_file--;
 							table->n_file_modified--;
 							table->memory_used -= to_reject->dim_bytes;
@@ -356,7 +363,7 @@ int init_file_inServer(hashtable* table,file_t *f,list* list_reject){
 	}
 	if(!find){
 		to_reject = pop_list(table->cache);
-		if(to_reject->opened_flag == 1 && to_reject->locked_flag == 0) table->n_files_free--;
+		if(to_reject->open_flag == 1 && to_reject->locked_flag == 0) table->n_files_free--;
 	}
 	else extract_file(&table->cell[h], to_reject);
 	table->memory_used -= to_reject->dim_bytes;
@@ -380,7 +387,7 @@ int ins_file_server(hashtable* table, file_t *f,list* list_reject){
 	
     if((table->memory_used + s.st_size) <= table->memory_capacity){
 		table->memory_used += s.st_size;
-        ins_file_hashtable(table,f);
+        if(!writeContentFile(f)) return 0;
 		return 1;
     }
 	if(table->n_file_modified == 0){
@@ -426,7 +433,7 @@ int ins_file_server(hashtable* table, file_t *f,list* list_reject){
 					table->memory_used_from_modified_files -= to_reject->dim_bytes;
 					table->n_file--;
 					table->n_file_modified--;
-					if(to_reject->opened_flag == 1 && to_reject->locked_flag == 0) table->n_files_free--;
+					if(to_reject->open_flag == 1 && to_reject->locked_flag == 0) table->n_files_free--;
 					ins_tail_list(list_reject,to_reject);
 					free(to_reject);
 				} 
@@ -441,7 +448,7 @@ int ins_file_server(hashtable* table, file_t *f,list* list_reject){
 			if(table->cache->dim_bytes >= s.st_size){
 				while(table->memory_capacity > table->memory_used + s.st_size){
 					file_t* to_reject = pop_list(table->cache);
-					if(to_reject->opened_flag == 1 && to_reject->locked_flag == 0) table->n_files_free--;
+					if(to_reject->open_flag == 1 && to_reject->locked_flag == 0) table->n_files_free--;
 					table->memory_used -= to_reject->dim_bytes;
 					table->memory_used_from_modified_files -= to_reject->dim_bytes;
 					table->n_file--;
@@ -453,7 +460,6 @@ int ins_file_server(hashtable* table, file_t *f,list* list_reject){
 			
 		}
 	}
-
 	if(!writeContentFile(f)) return 0;
 	table->stat_n_replacing_algoritm++;
 	table->memory_used += f->dim_bytes;

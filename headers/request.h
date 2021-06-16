@@ -21,8 +21,8 @@ typedef struct f{
     int socket_fd;
     int flags;
     int c; //contatore generico
-    char file_name[NAME_MAX];
-    char dirname[NAME_MAX];
+    char pathfile[NAME_MAX];
+    char dirpath[NAME_MAX];
     void *buff;
     size_t request_size;
     req_type type;
