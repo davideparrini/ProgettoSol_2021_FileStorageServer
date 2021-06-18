@@ -7,6 +7,7 @@ file_t* init_file(char *namefile){
 		return NULL;
 	}
 	file_t* new = malloc(sizeof(file_t));
+	memset(new,0,sizeof(file_t));
 	new->abs_path= malloc(sizeof(char)*NAME_MAX);
 	memset(new->abs_path,0,sizeof(new->abs_path));
 	strncpy(new->abs_path,namefile,NAME_MAX);
@@ -33,6 +34,7 @@ int writeContentFile(file_t* f){
 		return 0;
     }
 	f->content = malloc(s.st_size);
+	memset(f->content,0,s.st_size);
 	while((l = read(f->fd,f->content,s.st_size)) > 0);
 	if(l == -1){
 		perror("lettura file in writeContentFile");
@@ -67,7 +69,9 @@ void init_hash(hashtable *table, config s){
 	table->stat_n_replacing_algoritm = 0;
 
 	table->cell = malloc(table->len*sizeof(list));
+	memset(table->cell,0,table->len*sizeof(list));
 	table->cache = malloc(sizeof(file_t)*table->max_size_cache);
+	memset(table->cache,0,sizeof(file_t)*table->max_size_cache);
 	for (size_t i = 0;i < table->len; i++){
 		init_list(&table->cell[i]);
 	}
@@ -504,12 +508,7 @@ int isContains_hash(hashtable table, file_t* file){
 	size_t h = hash(table,file->abs_path);
 	return isContains_list(table.cell[h],file);
 }
-void free_file(file_t* file){
-	if(file->content != NULL) free(file->content);
-	if(file->fd > 0) close(file->fd);
-	free(file->abs_path);
-	free(file);
-}
+
 
 list* concatList(list *l,list *l2){
 	if(l->head != NULL && l2->head != NULL){
@@ -522,6 +521,13 @@ list* concatList(list *l,list *l2){
 	}
 	else return NULL;
 }
+
+void free_file(file_t* file){
+	if(file->content != NULL) free(file->content);
+	if(file->fd > 0) close(file->fd);
+	free(file->abs_path);
+	free(file);
+}
 void free_list(list* l){
 	while(l->head != NULL){
 		file_t *reject = l->head;
@@ -530,16 +536,17 @@ void free_list(list* l){
 	}
 	free(l);
 }
-void cleanList(list *l){
-	while(l->head != NULL){
-		file_t *reject = l->head;
-		l->head = l->head->next;
-		free_file(reject);
+
+void free_hash(hashtable *table){
+	for (int i=0; i <= table->len; i++){
+		if(table->cell[i].head != NULL){
+			free_list(&table->cell[i]);
+		}
 	}
-	l->head = NULL;
-	l->tail = NULL;
-	l->size = 0;
+	free(&table->cache);
+	free(table);
 }
+
 void print_storageServer(hashtable table){
 	//stampa hash
 	for (int i=0; i <= table.len; i++){
@@ -557,6 +564,7 @@ void print_storageServer(hashtable table){
 		printf("NULL\n");
 	}
 }
+
 
 
 dupFile_t* init_dupFile(file_t* f){

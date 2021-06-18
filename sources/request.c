@@ -44,7 +44,3 @@ void rmv_r(){
 int isEmpty_r(){
     return (head == NULL) ? 1 : 0;
 }
-void free_request(request* r){
-    if(r->buff != NULL) free(r->buff);
-    free(r);
-}

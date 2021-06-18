@@ -23,7 +23,6 @@ typedef struct f{
     int c; //contatore generico
     char pathfile[NAME_MAX];
     char dirpath[NAME_MAX];
-    void *buff;
     size_t request_size;
     req_type type;
 }request;
@@ -37,7 +36,6 @@ void init_r(request *r);
 void push_r(request *r);
 request* pop_r();
 int isEmpty_r();
-void free_request();
 void rmv_r();
 
 #endif

@@ -96,9 +96,11 @@ int isEmpty(list cella);
 int isCacheFull(hashtable table);
 void free_file(file_t* file);
 void free_list(list* l);
+void free_hash(hashtable* table);
+
 void print_storageServer(hashtable table);
 list* concatList(list *l,list *l2);
-void cleanList(list *l);
+
 
 dupFile_t* init_dupFile(file_t* f);
 
