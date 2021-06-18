@@ -11,6 +11,7 @@ file_t* init_file(char *namefile){
 	memset(new->abs_path,0,sizeof(new->abs_path));
 	strncpy(new->abs_path,namefile,NAME_MAX);
 	new->fd = -2;
+	new->dim_bytes = 0;
 	new->modified_flag = 0;
 	new->open_flag = 0;
 	new->o_create_flag = 0;
@@ -59,7 +60,7 @@ void init_hash(hashtable *table, config s){
 	table->n_files_free = 0;
 	table->n_file_modified = 0;
 	table->max_n_file = s.max_n_file;
-	table->max_size_cache = s.max_n_file * 10 / 100;
+	table->max_size_cache = ((s.max_n_file * 10 / 100) > 1 ? (s.max_n_file * 10 / 100) : 1);
 
 	table->stat_dim_file = 0;
 	table->stat_max_n_file = 0;
@@ -94,7 +95,7 @@ void ins_tail_list(list *cell,file_t *file){
         file->prec = cell->tail;
 		cell->tail->next = file;
 	}
-	cell->tail  = file;
+	cell->tail = file;
 	cell->size++;
 	cell->dim_bytes += file->dim_bytes;
 }
@@ -103,8 +104,11 @@ void ins_head_list(list *cell,file_t *file){
 	//inserimento in testa della lista
 	file->next = NULL; //per sicurezza annullo i puntatori next/prec del file
 	file->prec = NULL;
+	if (cell->size == 0){
+		cell->tail = file;
+	}
+	else cell->head->prec = file;
     file->next = cell->head;
-    cell->head->prec = file;
     cell->head = file;
     cell->size++;
 	cell->dim_bytes += file->dim_bytes;
@@ -117,8 +121,8 @@ file_t* pop_list(list *cell){
     }
     else{
 		file_t *res = cell->tail;
-		cell->tail = cell->tail->prec;
-		cell->tail->next = NULL;
+		if(cell->tail != cell->head) cell->tail = cell->tail->prec;
+		res->next = NULL;
 		res->prec = NULL;
 		cell->size--;
 		cell->dim_bytes -= res->dim_bytes;
@@ -202,12 +206,11 @@ void update_file(hashtable *table,file_t* file){
 	}
     if(file->inCache_flag){
 		extract_file(table->cache,file);
-		ins_head_list(
-			table->cache,file);
+		ins_head_list(table->cache,file);
 	}
 	else{
 		int h;
-		if(isCacheFull){
+		if(isCacheFull(*table)){
 			file_t *f = pop_list(table->cache);
 			f->inCache_flag = 0;
 			table->cache->dim_bytes -= f->dim_bytes;
@@ -216,7 +219,7 @@ void update_file(hashtable *table,file_t* file){
 		}
 		h = hash(*table,file->abs_path);
 		extract_file(&table->cell[h],file);
-		ins_head_list(&table->cell[table->len],file);
+		ins_head_list(table->cache,file);
 		table->cache->dim_bytes += file->dim_bytes;
 		file->inCache_flag = 1;		
 	}
@@ -260,7 +263,6 @@ int modifying_file(hashtable* table,file_t* f,size_t size_inplus,list* list_reje
 	if(table->memory_capacity < table->memory_used + size_inplus){
 		if(table->n_file_modified == 0){
             printf("Server pieno e non ci sono file modificati nel server\nImpossibile modificare file\n");
-			free(f);  
 			return 0;
         }
 		else{
@@ -483,7 +485,7 @@ int isEmpty(list cella){
 	else return 1; 
 }
 int isCacheFull(hashtable table){
-	if(table.cell->size == table.max_size_cache) return 1;
+	if(table.cache->size == table.max_size_cache) return 1;
 	else return 0;
 }
 int isContains_list(list cell, file_t* file){

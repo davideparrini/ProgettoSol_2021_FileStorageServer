@@ -89,6 +89,7 @@ int openFile(const char* pathname, int flags){
     r.flags = flags;
     r.type = OPEN_FILE; 
     memset(&r.pathfile,0,NAME_MAX);
+
     strncpy(r.pathfile,pathname,NAME_MAX);
 
     if(b = writen(client_fd,&r,sizeof(r)) == -1){
@@ -142,6 +143,11 @@ int openFile(const char* pathname, int flags){
 		errno = EINTR;
         return -1;
 
+    
+    case FILE_NOT_EXIST:
+		errno = ENOENT;
+        return -1;
+
     default: break;
 
     }
@@ -151,7 +157,7 @@ int openFile(const char* pathname, int flags){
 }
 
 int readFile(const char* pathname, void** buf, size_t* size){
-    int b;
+    int b, flag_ok;
     request r;
     response feedback;
 
@@ -168,19 +174,32 @@ int readFile(const char* pathname, void** buf, size_t* size){
         return -1;
     }
 
-    size_t len;
-    if(readn(client_fd,&len,sizeof(size_t)) == -1){
-        perror("GET CONTENT ERROR IN WRITEN");
-		return 0;
+    if(readn(client_fd,&flag_ok,sizeof(int)) == -1){
+        perror("readn flag_ok in readFile");
+        exit(EXIT_FAILURE);
     }
-    char content[len];
-    memset(content,0,len);
+    if(flag_ok){
 
-    if(readn(client_fd,&content,len) == -1){
-        perror("GET CONTENT ERROR IN WRITEN 2");
-		return 0;
+        size_t len;
+
+        if(readn(client_fd,&len,sizeof(size_t)) == -1){
+            perror("GET CONTENT ERROR IN WRITEN");
+            exit(EXIT_FAILURE);
+        }
+        
+        char content[len];
+        memset(content,0,len);
+
+        if(readn(client_fd,&content,len+1) == -1){
+            perror("GET CONTENT ERROR IN WRITEN 2");
+            exit(EXIT_FAILURE);
+        }
+
+        *size = len;
+        *buf = malloc(len+1);
+        memset(*buf, 0, *size);
+        memcpy(*buf,content,len+1);
     }
-
     if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
         return -1;
@@ -206,16 +225,18 @@ int readFile(const char* pathname, void** buf, size_t* size){
         errno = EPERM;
         return -1;
 
+    case CANNOT_READ_EMPTY_FILE:
+        *buf = NULL;
+		*size = 0;
+        errno = ENODATA;
+        return -1;
+
     case READ_FILE_SUCCESS:
         printf("File ' %s ' letto con successo\n", pathname);
         break;
           
     default: break;
     }
-    *size = feedback.size;
-    *buf = malloc(feedback.size+1);
-    memset(*buf, 0, *size);
-    memcpy(*buf,content,feedback.size);
     errno = 0;
     return 0;
 
@@ -227,7 +248,7 @@ int readNFiles(int N, const char* dirname){
     memset(&r,0,sizeof(request));
     memset(&r.dirpath,0,sizeof(r.dirpath));
     memset(&feedback, 0, sizeof(response));
-    memset(&feedback.content,0,sizeof(feedback.content));
+
 
     if(dirname != NULL){
         strncpy(r.dirpath,dirname,NAME_MAX);
@@ -252,16 +273,12 @@ int readNFiles(int N, const char* dirname){
         if(b = readn(client_fd,&buff_size,sizeof(size_t)) == -1){
             errno = EAGAIN;
         }
-        void *buff = malloc(buff_size+1);
-        memset(&buff,0,buff_size);
         char content[buff_size];
         memset(content,0,buff_size);
         if(b = readn(client_fd,&content,buff_size) == -1){
             errno = EAGAIN;
         }
-        memcpy(buff,content,buff_size);
-        printf("****Contenuto file %d :****\n%s\n\n",i,(char*) buff);
-        free(buff);
+        printf("****Contenuto file %d :****\n%s\n\n",i,content);
         i++;
     }
 
@@ -292,9 +309,13 @@ int writeFile(const char* pathname, const char* dirname){
     memset(&r.pathfile,0,sizeof(r.pathfile));
     memset(&r.dirpath,0,sizeof(r.dirpath));
     memset(&feedback, 0, sizeof(response));
-    memset(&feedback.content,0,sizeof(feedback.content));
+   
 
     r.type = WRITE_FILE;
+    if(!strlen(pathname)){
+        errno = ENOENT;
+        return -1;
+    }
     strncpy(r.pathfile,pathname,NAME_MAX);
    
     if(dirname != NULL){
@@ -339,29 +360,43 @@ int writeFile(const char* pathname, const char* dirname){
 
 int appendToFile(const char* pathname, void* buf, size_t size, const char* dirname){
 
-    int b;
+    int b, flags_ok; //se i flag open e lock  del file sono settati su open = 1 e lock = 0
+                        // allora flag_ok = 1 (avvio la procedura di invio del contenuto da append ), altrimenti 0 
     request r;
     response feedback;
     memset(&r,0,sizeof(request));
     memset(&r.pathfile,0,sizeof(r.pathfile));
     memset(&r.dirpath,0,sizeof(r.dirpath));
     memset(&feedback, 0, sizeof(response));
-    memset(&feedback.content,0,sizeof(feedback.content));
-    r.buff = malloc(size);
-    memset(r.buff,0,size);
 
-    r.buff = buf;
+
     r.request_size = size;
     r.type = APPEND_FILE;
+        
     strncpy(r.pathfile,pathname,NAME_MAX);
     
-    if(dirname != NULL){
-        strncpy(r.dirpath,dirname,NAME_MAX);
-    }
+    if(dirname != NULL) strncpy(r.dirpath,dirname,NAME_MAX);
     
+
     if(b = writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
         return -1;
+    }
+
+    if(readn(client_fd,&flags_ok,sizeof(int)) == -1){
+        errno = EAGAIN;
+        return 0;
+    }
+
+    if(flags_ok){
+        char content[size]; 
+        memset(content,0,size);
+        memcpy(content,buf,size+1);
+        if(writen(client_fd,content,size+1) == -1){
+            perror("SEND CONTENT ERROR IN WRITEN");
+            return 0;
+        }
+        
     }
 
     if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
@@ -410,9 +445,13 @@ int closeFile(const char* pathname){
     memset(&r,0,sizeof(request));
     memset(&r.pathfile,0,sizeof(r.pathfile));;
     memset(&feedback, 0, sizeof(response));
-    memset(&feedback.content,0,sizeof(feedback.content));
 
     r.type = CLOSE_FILE;
+
+    if(!strlen(pathname)){
+        errno = ENOENT;
+        return -1;
+    }
 
     strncpy(r.pathfile,pathname,NAME_MAX);
 
@@ -453,11 +492,14 @@ int removeFile(const char* pathname){
     request r;
     response feedback;
     memset(&r,0,sizeof(request));
-    memset(&r.pathfile,0,sizeof(r.pathfile));;
+    memset(&r.pathfile,0,sizeof(r.pathfile));
     memset(&feedback, 0, sizeof(response));
-    memset(&feedback.content,0,sizeof(feedback.content));
-
     r.type = REMOVE_FILE;
+
+    if(!strlen(pathname)){
+        errno = ENOENT;
+        return -1;
+    }
     strncpy(r.pathfile,pathname,NAME_MAX);
 
     if(b = writen(client_fd,&r,sizeof(r)) == -1){

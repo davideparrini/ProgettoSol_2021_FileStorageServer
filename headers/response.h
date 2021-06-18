@@ -5,6 +5,7 @@
 typedef enum{
     GENERIC_ERROR,
     O_CREATE_NOT_SPECIFIED_AND_FILE_NEXIST,
+    CANNOT_READ_EMPTY_FILE,
     FILE_ALREADY_OPENED,
     FILE_ALREADY_EXIST,
     CANNOT_ACCESS_FILE_LOCKED,
@@ -35,7 +36,6 @@ typedef struct s{
     response_type type;
     int flags;
     int c; //contatore generico
-    void * content;
     size_t size;
     int len;
 }response;

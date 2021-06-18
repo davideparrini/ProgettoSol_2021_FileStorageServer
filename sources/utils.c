@@ -71,7 +71,6 @@ int msleep(unsigned int tms) {
 
 int findFile_getAbsPath(const char dirPartenza[], const char nomefile[],char** resolvedpath){
 	if(chdir(dirPartenza) == -1){
-		printf("CHDRI ERR\n");
 		return 0;
 	}
 	DIR* dir;
@@ -101,6 +100,7 @@ int findFile_getAbsPath(const char dirPartenza[], const char nomefile[],char** r
 				strncat(*resolvedpath,"/",2);
 				strncat(*resolvedpath,nomefile,NAME_MAX);
 			}
+		
 		}
 	}
 	PRINT_ERRNO(readdir,errno);
@@ -150,22 +150,32 @@ int findDir_getAbsPath(const char dirPartenza[], const char dirToSearch[],char *
 
 
 
-int sendContent(int socket_fd,void* content,size_t dim){
-	//int len = strlen((char*) content);
-	char buffer[dim];
-	memset(buffer,0,dim);
-	memcpy(buffer,content,dim);
-
-	if(writen(socket_fd,&dim,sizeof(size_t)) == -1){
-		errno = EAGAIN;
-		return 0;
-    }
-
-	if(writen(socket_fd,buffer,dim) == -1){
-		perror("SEND CONTENT ERROR IN WRITEN");
-		return 0;
+int sendContent(int socket_fd,void* content,size_t dim,int needFlagsOk){
+	int flags_ok = 1;
+	if(needFlagsOk){
+		if(readn(socket_fd,&flags_ok,sizeof(int)) == -1){
+			errno = EAGAIN;
+			return 0;
+		}
 	}
-	return 1;
+	if(flags_ok){
+		char buffer[dim];
+		memset(buffer,0,dim+1);
+		memcpy(buffer,content,dim+1);
+
+		if(writen(socket_fd,&dim,sizeof(size_t)) == -1){
+			errno = EAGAIN;
+			return 0;
+		}
+
+		if(writen(socket_fd,buffer,dim+1) == -1){
+			perror("SEND CONTENT ERROR IN WRITEN");
+			return 0;
+		}
+		printf("content\n %s\n\n\n",buffer);
+		return 1;
+	}
+
 }
 int getContent(int client_fd, void *buff){
 	

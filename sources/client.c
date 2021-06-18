@@ -13,7 +13,7 @@ static int msec_between_req = 0;
 int arg_h(char* s);
 int arg_f(char* newsock,char* oldsock);
 int arg_w(char* s,char* dir_rejectedFile);
-int writeFileDir(char* dirpath,char* dir_rejectedFile,int n,int flag_end,size_t* written_bytes);
+int writeFileDir(char* dirpath,char* dir_rejectedFile,int n,int flag_end,size_t* written_bytes,int tutto_ok);
 int arg_W(char* s,char* dir_rejectedFile);
 int arg_r(char* s,char* dirname);
 int arg_R(int n,char* dirname);
@@ -52,7 +52,7 @@ int main(int argc, char *argv[]){
     int termina = 0;
     int f = 0, h = 0,p = 0;
 
-    while((opt = getopt(argc, argv,"hf:w:W:D:r:R:d:t:l:u:c:po:O:a:")) != -1 && !termina){
+    while((opt = getopt(argc, argv,"hf:w:W:D:r:R:d:t:l:u:c:po:O:a:C:")) != -1 && !termina){
 
         switch (opt){
         case 'h': 
@@ -140,6 +140,10 @@ int main(int argc, char *argv[]){
             break;
 
         case 'a': 
+            push_char(opt,optarg);
+            break;
+
+        case 'C': 
             push_char(opt,optarg);
             break;
 
@@ -295,15 +299,15 @@ int arg_w(char* s,char* dir_rejectedFile){
     size_t contatore_bytes_scritti = 0;
     char* dirname = strtok(s,",");
     char* dirpath = malloc(sizeof(char) * NAME_MAX);
-    findFile_getAbsPath(".",dirname,&dirpath);
-    char* nfile = strtok(NULL,",");
+    findDir_getAbsPath(testDirPath ,dirname,&dirpath);
 
+    char* nfile = strtok(NULL,",");
     int n, flag_end = 0;
     if(nfile != NULL) n = atoi(nfile);
     else n = 0;
     if(n == 0) flag_end = 1;
 
-    esito = writeFileDir(dirpath,dir_rejectedFile,n,flag_end,&contatore_bytes_scritti);
+    esito = writeFileDir(dirpath,dir_rejectedFile,n,flag_end,&contatore_bytes_scritti,1);
     if(flag_stamp_op){
             time_t t_op = time(NULL);
             PRINT_OP("Writefile arg_w","writeNfile",&t_op,esito,contatore_bytes_scritti);
@@ -312,10 +316,12 @@ int arg_w(char* s,char* dir_rejectedFile){
     return esito;
 }
 
-int writeFileDir(char* dirpath,char* dir_rejectedFile,int n,int flag_end,size_t* written_bytes){
+int writeFileDir(char* dirpath,char* dir_rejectedFile,int n,int flag_end,size_t* written_bytes,int tutto_ok){
+    if(n == 0) return tutto_ok;
+
     if (chdir(dirpath) == -1) {
         printf("Errore cambio directory\n");
-        return -1;
+        return 0;
     }
     DIR * dir;
     if((dir = opendir(".")) == NULL){
@@ -331,7 +337,7 @@ int writeFileDir(char* dirpath,char* dir_rejectedFile,int n,int flag_end,size_t*
         }    
         if(S_ISDIR(statbuf.st_mode)){
             if(!isdot(file->d_name)){
-                if(writeFileDir(file->d_name,dir_rejectedFile,n,flag_end,written_bytes) != -1){
+                if(writeFileDir(file->d_name,dir_rejectedFile,n,flag_end,written_bytes,tutto_ok) != 0){
                     if (chdir("..") == -1) {
                         printf("Impossibile risalire alla directory padre.\n");
                         return -1;
@@ -340,16 +346,21 @@ int writeFileDir(char* dirpath,char* dir_rejectedFile,int n,int flag_end,size_t*
             }
         }
         else{
-            if(!writeFile(file->d_name,dir_rejectedFile)){
+            char* buf = malloc(sizeof(char) * NAME_MAX);
+            findFile_getAbsPath(testDirPath,file->d_name,&buf);
+            if(!writeFile(buf,dir_rejectedFile)){
                 *written_bytes += statbuf.st_size;
                 if(flag_end) n++;
                 n--;
+            }
+            else{
+                tutto_ok = 0;
             }
         }
     }
     if (errno != 0) perror("readdir in writeFileDir");
     closedir(dir);
-    return 0;
+    return 1;
 }
 int arg_W(char* s,char* dir_rejectedFile){
     int esito = 0;
@@ -398,31 +409,36 @@ int arg_r(char* s,char* dirname){
         size_t size;
         char* buf = malloc(sizeof(char) * NAME_MAX);
         findFile_getAbsPath(testDirPath,token,&buf);
-        if((esito = readFile(buf,&buff,&size)) == -1){
-            perror("Errore readFile");
-        }
-        printf("***Contenuto File***:\n%s\n\n",(char*)buff);  
-        if(dirname != NULL){
-            char *dup = strndup(absPath,NAME_MAX);
-            strcat(dup,token);
-            int new_fd;            
-            if((new_fd = open(dup,O_WRONLY|O_CREAT|O_EXCL,0777)) == -1){
-                perror("Errore creazione file in arg_r");
-                esito = -1;
+        if(!strlen(buf)) esito = -1;
+        else{
+            if((esito = readFile(buf,&buff,&size)) == -1){
+                perror("Errore readFile");
             }
-            struct stat statbuf;
-            if(stat(dup, &statbuf)==-1) {	
-                perror("stat in arg_r");
-                esito = -1;
-            }
-            if(!statbuf.st_size){
-                if( write(new_fd,buff,size) == -1 ){
-                    perror("Errore scrittura file in arg_r");
+            if(!esito){
+                printf("***Contenuto File***:\n%s\n\n",(char*)buff);  
+                if(dirname != NULL){
+                    char *dup = strndup(absPath,NAME_MAX);
+                    strcat(dup,token);
+                    int new_fd;            
+                    if((new_fd = open(dup,O_WRONLY|O_CREAT|O_EXCL,0777)) == -1){
+                        perror("Errore creazione file in arg_r");
+                        esito = -1;
+                    }
+                    struct stat statbuf;
+                    if(stat(dup, &statbuf)==-1) {	
+                        perror("stat in arg_r");
+                        esito = -1;
+                    }
+                    if(!statbuf.st_size){
+                        if( write(new_fd,buff,size) == -1 ){
+                            perror("Errore scrittura file in arg_r");
+                        }
+                    }
+                    else printf("File %s già presente nella dir %s\n",token,dirname);
+                    free(dup);
+                    close(new_fd);
                 }
             }
-            else printf("File %s già presente nella dir %s\n",token,dirname);
-            free(dup);
-            close(new_fd);
         }
         read_bytes += size;
         size = 0;   
@@ -471,7 +487,7 @@ int arg_c(char* s){
     char* token = strtok(s,",");
     while(token != NULL && !esito){
         char* buf = malloc(sizeof(char) * NAME_MAX);
-        findDir_getAbsPath(testDirPath,token,&buf);
+        findFile_getAbsPath(testDirPath,token,&buf);
         if((esito = removeFile(buf)) == -1){
             perror("Errore removeFile");
         }
@@ -510,6 +526,11 @@ int arg_o(char* s){
     while(token != NULL){
         char* buf = malloc(sizeof(char) * NAME_MAX);
         findFile_getAbsPath(testDirPath,token,&buf);
+        if(!strlen(buf)){ 
+            strcat(buf,testDirPath);
+            strcat(buf,"/");
+            strcat(buf,token);
+        }
         if((esito = openFile(buf,o_flag)) == -1){
             perror("Errore openFile");
         }
@@ -535,22 +556,22 @@ int arg_O(int n){
 int arg_a(char* s){
     int esito = 0;
     char* token = strtok(s,":");
-    char* content = strtok(NULL,"^?^?^""£_");
+    char* content = strtok(NULL,"");
     char* buffer = malloc(sizeof(char) * NAME_MAX);
 
     findFile_getAbsPath(testDirPath,token,&buffer);
-
-    if(appendToFile(token,(void*)content,sizeof(content),NULL) == -1){
-        perror("Errore appendToFile");
-        esito = -1;
+    if(!strlen(buffer)) esito = -1;
+    else{
+        if(appendToFile(buffer,(void*)content,strlen(content),NULL) == -1){
+            perror("Errore appendToFile");
+            esito = -1;
+        }
     }
     if(flag_stamp_op){
         time_t t_op = time(NULL);
         PRINT_OP("appendToFile",token,&t_op,esito,sizeof(content));
     } 
     free(buffer);
-    free(token);
-    free(content);
     return esito; 
 }
 
@@ -559,7 +580,7 @@ int arg_C(char* s){
     char* token = strtok(s,",");
     while(token != NULL && !esito){
         char* buf = malloc(sizeof(char) * NAME_MAX);
-        findDir_getAbsPath(testDirPath,token,&buf);
+        findFile_getAbsPath(testDirPath,token,&buf);
         if((esito = closeFile(buf)) == -1){
             perror("Errore closeFile");
         }

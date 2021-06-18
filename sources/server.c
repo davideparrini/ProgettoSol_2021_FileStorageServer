@@ -70,7 +70,7 @@ int main(int argc, char *argv[]){
 
     //printf("Scegliere un file .txt di configurazione: \n");
     //showDirConfig();
-    char c[PATHCONFIG] = {"config"};
+    char c[PATHCONFIG] = {"config2"};
     //scanf("%s",c);
     setConfigFile(c);
     setUpServer(&configurazione);
@@ -459,6 +459,7 @@ void do_task(request* r_from_client,response* feedback){
 
     case OPEN_FILE:
         if(task_openFile(r_from_client,feedback)){
+            print_storageServer(storage);
             stats_op.n_openfile++;
         }    
         break;
@@ -481,6 +482,8 @@ void do_task(request* r_from_client,response* feedback){
     case APPEND_FILE:
         if(task_append_file(r_from_client,feedback)){
             stats_op.n_appendfile++;
+            print_storageServer(storage);
+            
         }  
         break;
     
@@ -511,7 +514,7 @@ void do_task(request* r_from_client,response* feedback){
         break;
     }
    // print_storageServer(storage);
-    PRINT_ERRNO("do task",errno);
+    //PRINT_ERRNO("do task",errno);
 
 }
 
@@ -520,9 +523,8 @@ void do_task(request* r_from_client,response* feedback){
 int task_openFile(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
     //DA RIGUARDARE O_LOCK
-
     file_t* f = research_file(storage,r->pathfile);
-    int res = 0;
+
     switch (r->flags){
  
     case O_CREATE :
@@ -532,41 +534,49 @@ int task_openFile(request* r, response* feedback){
             f->o_create_flag = 1;
             if(!init_file_inServer(&storage,f,&files_rejected)){
                 feedback->type = NO_SPACE_IN_SERVER;
+                return 0;
             }
             else{
                 feedback->type =  O_CREATE_SUCCESS;
                 storage.n_files_free++;
-                res = 1;
-                if((f->fd = open(f->abs_path, O_RDWR)) == -1){
+                if((f->fd = open(f->abs_path, O_RDWR|O_CREAT,0777)) == -1){
                     perror("Errore open in task_open");
-                    res = 0;
+                    feedback->type = GENERIC_ERROR;
+                    return 0;
                 }
-                if(!res) feedback->type = GENERIC_ERROR;
+                return 1;
             }
         }
         else{
             feedback->type = FILE_ALREADY_EXIST;
+            return 0;
         }
         break;
     
     case O_LOCK :
-        if(f == NULL)  feedback->type = O_CREATE_NOT_SPECIFIED_AND_FILE_NEXIST;
+        if(f == NULL){
+            feedback->type = O_CREATE_NOT_SPECIFIED_AND_FILE_NEXIST;
+            return 0;
+        }
         else{
-            if(f->locked_flag == 1) feedback->type = CANNOT_ACCESS_FILE_LOCKED;
+            if(f->locked_flag == 1){
+                feedback->type = CANNOT_ACCESS_FILE_LOCKED;
+                return 0;
+            }
             else{
                 if(f->open_flag != 1){
                     f->open_flag = 1;
                     feedback->type = O_LOCK_SUCCESS;
-                    res = 1;
                     if((f->fd = open(f->abs_path, O_RDWR)) == -1){
                         perror("Errore open in task_open");
-                        res = 0;
+                        feedback->type = GENERIC_ERROR;
+                        return 0;
                     }
-                    if(!res) feedback->type = GENERIC_ERROR;
+                    return 1; 
                 }
                 else{
                     feedback->type = FILE_ALREADY_OPENED;
-                    res = 1;
+                    return 1;
                 }
                 
             }
@@ -581,41 +591,46 @@ int task_openFile(request* r, response* feedback){
             f->locked_flag = 1;
             if(!init_file_inServer(&storage,f,&files_rejected)){
                 feedback->type = NO_SPACE_IN_SERVER;
+                return 0;
             }
             else{
                 feedback->type =  O_CREATE_LOCK_SUCCESS;
-                res = 1;
-                if((f->fd = open(f->abs_path, O_RDWR)) == -1){
+                if((f->fd = open(f->abs_path, O_RDWR|O_CREAT,0777)) == -1){
                     perror("Errore open in task_open");
-                    res = 0;
+                    feedback->type = GENERIC_ERROR;
+                    return 0;
                 }
-                if(!res) feedback->type = GENERIC_ERROR;
+                return 1;
             }
         }
         else{
             feedback->type = FILE_ALREADY_EXIST;
+            return 0;
         }
     
         break;
 
     case O_NOFLAGS :
-        if(f == NULL)  feedback->type = O_CREATE_NOT_SPECIFIED_AND_FILE_NEXIST;
+        if(f == NULL){
+            feedback->type = O_CREATE_NOT_SPECIFIED_AND_FILE_NEXIST;
+            return 0;        
+        }
         else{
             if(f->locked_flag == 1) feedback->type = CANNOT_ACCESS_FILE_LOCKED;
             else{
                 if(f->open_flag != 1){
                     f->open_flag = 1;
                     storage.n_files_free++;  
-                    res = 1;
                     if((f->fd = open(f->abs_path, O_RDWR)) == -1){
                         perror("Errore open in task_open");
-                        res = 0;
+                        feedback->type = GENERIC_ERROR;
+                        return 0;
                     }
-                    if(!res) feedback->type = GENERIC_ERROR;
+                    return 1;
                 }
                 else{
                     feedback->type = FILE_ALREADY_OPENED;
-                    res = 1;
+                    return 0;
                 }
                 
             }
@@ -625,32 +640,67 @@ int task_openFile(request* r, response* feedback){
 
     default: break;
     }
-    return  res;
+    printf("Non ci dovrei arrivare qua!\n\n\n\n");
+    return  -1;
 }
 
 int task_read_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
-    int res = 0;
+    print_storageServer(storage);
+    int flag_ok = 1;
+
     file_t* f = research_file(storage,r->pathfile);
-    if(f == NULL) feedback->type = FILE_NOT_EXIST;
+
+    if(f == NULL){
+        flag_ok = 0;
+        if(writen(r->socket_fd,&flag_ok,sizeof(int)) == -1){
+            errno = EAGAIN;
+            return 0;
+        }
+        feedback->type = FILE_NOT_EXIST;
+        return 0;
+    }
     else{
+        
+        if(f->content == NULL){
+            feedback->type = CANNOT_READ_EMPTY_FILE;
+            flag_ok = 0;
+        }
+
         if(f->locked_flag){
             feedback->type = CANNOT_ACCESS_FILE_LOCKED;
-            return res;
+            flag_ok = 0;
         } 
         if(!f->open_flag){
             feedback->type = FILE_NOT_OPEN;
-            return res;
-        } 
+            flag_ok = 0;
+        }
+
+        if(writen(r->socket_fd,&flag_ok,sizeof(int)) == -1){
+            errno = EAGAIN;
+            return 0;
+        }
+
+        if(!flag_ok) return 0;
+
+        if(writen(r->socket_fd,&f->dim_bytes,sizeof(size_t)) == -1){
+            errno = EAGAIN;
+            return 0;
+        }
+
+        char buffer[f->dim_bytes];
+        memset(buffer,0,f->dim_bytes);
+        memcpy(buffer,f->content,f->dim_bytes+1);
+
+        if(writen(r->socket_fd,buffer,f->dim_bytes+1) == -1){
+            perror("SEND CONTENT ERROR IN WRITEN");
+            return 0;
+        }
+
         feedback->type = READ_FILE_SUCCESS;
-        res = 1;
         feedback->size = f->dim_bytes;
-        //feedback->content = malloc(f->dim_bytes);
-        //memcpy(feedback->content,f->content,feedback->size);
-        sendContent(r->socket_fd,f->content,f->dim_bytes);
+        return 1;
     }
-    
-    return res;
 }
 
 int task_read_N_file(request* r, response* feedback){
@@ -670,7 +720,7 @@ int task_read_N_file(request* r, response* feedback){
         if(storage.cell[h].head != NULL){
 			list temp = storage.cell[h];
 			while(temp.head != NULL && n_to_read > 0){
-                if(temp.head->open_flag == 1 && temp.head->locked_flag == 0){
+                if(temp.head->open_flag && !temp.head->locked_flag){
                     void *buff = malloc(temp.head->dim_bytes + 1);
                     memset(&buff,0,temp.head->dim_bytes);
                     int l;
@@ -678,16 +728,9 @@ int task_read_N_file(request* r, response* feedback){
                     ins_head_dupFilelist(&d_list,df);
                     while((l = read(temp.head->fd,buff,temp.head->dim_bytes)) > 0);
                     if(l == -1){
-                        perror("lettura file in writeContentFile");
-                        return 0;
+                        perror("lettura file in task_readNfile");
                     }
-                    if(writen(r->socket_fd,&temp.head->dim_bytes,sizeof(size_t)) == -1){
-                        errno = EAGAIN;
-                    }
-                    if(writen(r->socket_fd,&buff,temp.head->dim_bytes) == -1){
-                        errno = EAGAIN;
-                    }
-                    ////////////
+                    sendContent(r->socket_fd,buff,temp.head->dim_bytes,0);
                     contatore_file_letti++;
                     free(buff);
                 } 	
@@ -714,6 +757,7 @@ int task_read_N_file(request* r, response* feedback){
 }
 int task_write_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 
+    print_storageServer(storage);
     int res = 0;
     file_t* f = research_file(storage,r->pathfile);
     if(f == NULL){
@@ -741,58 +785,83 @@ int task_write_file(request* r, response* feedback){
 }
 int task_append_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
-    int res = 0;
+    print_storageServer(storage);
+    int flagsOk = 1;
     file_t* file = research_file(storage,r->pathfile);
     if(file == NULL){
+        flagsOk = 0;
+        if(writen(r->socket_fd,&flagsOk,sizeof(int)) == -1){
+            perror("Errore passaggio flagOk in task appendToFile");
+            return 0;
+        }
         feedback->type = FILE_NOT_EXIST;
     }
     else{
+        
         if(file->locked_flag == 1){
             feedback->type = CANNOT_ACCESS_FILE_LOCKED;
-            return res;
+            flagsOk = 0;
         }
 
         if(file->open_flag != 1){
             feedback->type = FILE_NOT_OPEN;
-            return res;
+            flagsOk = 0;
         }
+
+        if(writen(r->socket_fd,&flagsOk,sizeof(int)) == -1){
+            perror("Errore passaggio flagOk in task appendToFile");
+            return 0;
+        }
+
+        if(!flagsOk) return 0;
 
         pthread_mutex_lock(&mutex_file);
         if(modifying_file(&storage,file,r->request_size,&files_rejected)){
-            close(file->fd);
-            if((file->fd = open(file->abs_path,O_WRONLY|O_APPEND)) == -1){
-                perror("Errore apertura file in task_appendToFile");
-                res = 0;
-                feedback->type = GENERIC_ERROR;
-                pthread_mutex_unlock(&mutex_file); 
-                return res;
-            }
-            if(write(file->fd,r->buff,r->request_size) < 0){
-                perror("Errore scrittura file in task_appendToFile");
-                res = 0;
-                feedback->type = GENERIC_ERROR;
-                pthread_mutex_unlock(&mutex_file); 
-                return res;
-            }
-            close(file->fd);
-            if((file->fd = open(file->abs_path,O_RDWR)) == -1){
-                perror("Errore apertura 2 file in task_appendToFile");
-                res = 0;
-                feedback->type = GENERIC_ERROR;
-                pthread_mutex_unlock(&mutex_file); 
-                return res;
-            }
             
+            if(fcntl(file->fd,F_SETFL,O_RDWR|O_APPEND) == -1){
+                perror("Errore set flag in task_appendFile");
+                pthread_mutex_unlock(&mutex_file); 
+                return 0;
+            }
+
+            char content[r->request_size+1];
+            memset(content,0,r->request_size+1);
+
+            if(readn(r->socket_fd,&content,r->request_size+1) == -1){
+                perror("GET CONTENT ERROR IN WRITEN 2");
+                feedback->type = GENERIC_ERROR;
+                fcntl(file->fd,F_SETFL,O_RDWR);
+                pthread_mutex_unlock(&mutex_file);
+                return 0;
+            }
+            file->content = malloc(r->request_size);
+            memset(file->content,0,r->request_size);
+            memcpy(file->content, content,r->request_size+1);
+
+            if(write(file->fd,content,r->request_size) < 0){
+                perror("Errore scrittura file in task_appendToFile");
+                feedback->type = GENERIC_ERROR;
+                fcntl(file->fd,F_SETFL,O_RDWR);
+                pthread_mutex_unlock(&mutex_file); 
+                return 0;
+            }
+
+            if(fcntl(file->fd,F_SETFL,O_RDWR) == -1){
+                perror("Errore set flag in task_appendFile");
+                pthread_mutex_unlock(&mutex_file); 
+                return 0;
+            }
+
             feedback->type = APPEND_FILE_SUCCESS;
-            res = 1;
+            pthread_mutex_unlock(&mutex_file);   
         }
         else{
             feedback->type = NO_SPACE_IN_SERVER;
-        }
-        pthread_mutex_unlock(&mutex_file);    
+            pthread_mutex_unlock(&mutex_file);   
+            return 0;
+        }         
     }
-
-    return res;
+    return 1;
 }
 
 int task_unlock_file(request* r, response* feedback){
