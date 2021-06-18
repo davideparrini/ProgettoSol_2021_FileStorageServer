@@ -459,7 +459,6 @@ void do_task(request* r_from_client,response* feedback){
 
     case OPEN_FILE:
         if(task_openFile(r_from_client,feedback)){
-            print_storageServer(storage);
             stats_op.n_openfile++;
         }    
         break;
@@ -481,9 +480,7 @@ void do_task(request* r_from_client,response* feedback){
         break;
     case APPEND_FILE:
         if(task_append_file(r_from_client,feedback)){
-            stats_op.n_appendfile++;
-            print_storageServer(storage);
-            
+            stats_op.n_appendfile++;         
         }  
         break;
     
@@ -513,7 +510,8 @@ void do_task(request* r_from_client,response* feedback){
     default:
         break;
     }
-   // print_storageServer(storage);
+    print_storageServer(storage);
+    printf("\n\n");
     //PRINT_ERRNO("do task",errno);
 
 }
@@ -646,7 +644,6 @@ int task_openFile(request* r, response* feedback){
 
 int task_read_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
-    print_storageServer(storage);
     int flag_ok = 1;
 
     file_t* f = research_file(storage,r->pathfile);
@@ -757,7 +754,6 @@ int task_read_N_file(request* r, response* feedback){
 }
 int task_write_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 
-    print_storageServer(storage);
     int res = 0;
     file_t* f = research_file(storage,r->pathfile);
     if(f == NULL){
@@ -785,7 +781,6 @@ int task_write_file(request* r, response* feedback){
 }
 int task_append_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
-    print_storageServer(storage);
     int flagsOk = 1;
     file_t* file = research_file(storage,r->pathfile);
     if(file == NULL){
