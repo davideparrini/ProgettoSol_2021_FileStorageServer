@@ -178,6 +178,7 @@ int readFile(const char* pathname, void** buf, size_t* size){
         perror("readn flag_ok in readFile");
         exit(EXIT_FAILURE);
     }
+
     if(flag_ok){
 
         size_t len;

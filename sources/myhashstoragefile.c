@@ -534,7 +534,7 @@ void free_list(list* l){
 		l->head = l->head->next;
 		free_file(reject);
 	}
-	free(l);
+	//free(l);
 }
 
 void free_hash(hashtable *table){
@@ -543,8 +543,8 @@ void free_hash(hashtable *table){
 			free_list(&table->cell[i]);
 		}
 	}
-	free(&table->cache);
-	free(table);
+	//free(&table->cache);
+	//free(table);
 }
 
 void print_storageServer(hashtable table){

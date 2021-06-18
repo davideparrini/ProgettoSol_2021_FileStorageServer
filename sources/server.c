@@ -23,6 +23,7 @@ typedef struct {
 static pthread_cond_t cond_var_request = PTHREAD_COND_INITIALIZER;
 static pthread_cond_t cond_var_pipe_WM = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t mutex_request = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mutex_connections = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mutex_file = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mutex_pipe_signal = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mutex_pipe_WM = PTHREAD_MUTEX_INITIALIZER;
@@ -35,9 +36,11 @@ static list files_rejected;
 static stats stats_op;
 static int signal_pipe[2];
 static int pipeWorker_manager[2];
+
 #define VERDE 1
 #define ROSSO 0
 static int flag_semaforo = VERDE;
+
 static int flag_SigHup = 0;
 static int flag_closeServer = 0;
 
@@ -83,7 +86,7 @@ int main(int argc, char *argv[]){
     pthread_t thread_manager;
     pthread_t thread_workers[configurazione.n_thread_workers];
     pthread_t sighandler_thread;
-/*
+
     sigset_t mask;
     sigemptyset(&mask);
     sigaddset(&mask, SIGINT); 
@@ -95,7 +98,7 @@ int main(int argc, char *argv[]){
         cleanup();
         exit(EXIT_FAILURE); 
     }
-*/
+/*
     struct sigaction s;
     memset(&s, 0, sizeof(s));
     s.sa_handler = SIG_IGN;
@@ -105,7 +108,7 @@ int main(int argc, char *argv[]){
         exit(EXIT_FAILURE); 
     } 
     
-
+*/
     if ((pipe(signal_pipe))==-1) {
 	    perror("signalpipe");
         cleanup();
@@ -118,13 +121,13 @@ int main(int argc, char *argv[]){
     }
     
  
-    /*
+
     if(pthread_create(&sighandler_thread,NULL, sigHandler,&mask) == -1){
         perror("Errore creazione sighandler_thread");
         cleanup();
         exit(EXIT_FAILURE);  
     }
-    */
+    
     if(pthread_create(&thread_manager,NULL, manager_thread_function,NULL) == -1){
         perror("Errore creazione thread_manager");
         cleanup();
@@ -150,13 +153,13 @@ int main(int argc, char *argv[]){
             exit(EXIT_FAILURE);  
         }
     }
-/*
+
     if(pthread_join(sighandler_thread, NULL) != 0){
         perror("Errore join sighandler_thread");
         cleanup();
         exit(EXIT_FAILURE);
     }
- */   
+   
     //printf("Contenuto directory Logs:\n");
     //showDirLogs();
     //printf("Dare un nome al filelog.txt :\n");
@@ -286,9 +289,9 @@ void* manager_thread_function(void* args){
     printf("Pronto a ricevere connessioni!\n");
     int termina = 0;
     while(!termina){
-        pthread_mutex_lock(&mutex_request);
+        pthread_mutex_lock(&mutex_connections);
         tmpset = set;
-        pthread_mutex_unlock(&mutex_request);
+        pthread_mutex_unlock(&mutex_connections);
         if(select(fdmax+1,&tmpset,NULL,NULL,NULL) == -1){
             perror("Errore in select");
             exit(EXIT_FAILURE);
@@ -301,10 +304,10 @@ void* manager_thread_function(void* args){
                         exit(EXIT_FAILURE);
                     }
                     printf("Ricevuta connessione! Client_fd: %d\n",client_fd);
-                    pthread_mutex_lock(&mutex_request);
+                    pthread_mutex_lock(&mutex_connections);
                     FD_SET(client_fd,&set);
                     push_q(&client_fd);
-                    pthread_mutex_unlock(&mutex_request);
+                    pthread_mutex_unlock(&mutex_connections);
                     if(client_fd > fdmax) fdmax = client_fd;
                 } 
                 else{
@@ -322,21 +325,21 @@ void* manager_thread_function(void* args){
                             pthread_mutex_unlock(&mutex_request);
                             termina = 1;
                             flag_closeServer = 1;
-                            break;
                         }
                         if(sig == SIGHUP){
+                            pthread_mutex_lock(&mutex_connections);
                             close(server_fd);  
                             FD_CLR(server_fd,&set);
                             flag_SigHup = 1;
                             
                             if(isEmpty_q()){
                                 pthread_mutex_lock(&mutex_request);
+                                flag_closeServer = 1;
                                 pthread_cond_broadcast(&cond_var_request);
                                 pthread_mutex_unlock(&mutex_request);
                                 termina = 1;
-                                flag_closeServer = 1;
                             }
-                            break;
+                            pthread_mutex_unlock(&mutex_connections);
                         }   
                     }
                     else{   
@@ -356,18 +359,18 @@ void* manager_thread_function(void* args){
                         else{ //ascolto client-> readn -> metto in coda
                             request r;
                             memset(&r,0,sizeof(request));
-                            pthread_mutex_lock(&mutex_pipe_WM);
+                            pthread_mutex_lock(&mutex_request);
                             if((b = readn(i,&r,sizeof(request))) == -1){
                                 perror("Errore readn request");
                                 exit(EXIT_FAILURE);
                             }
                             if(b == 0){
                                 close(i);
-                                pthread_mutex_lock(&mutex_request);
+                                pthread_mutex_lock(&mutex_connections);
                                 FD_CLR(i,&set);
                                 if(i == fdmax) fdmax = update_fdmax(set,fdmax);
                                 removeConnection_q(&i);
-                                pthread_mutex_unlock(&mutex_request);
+                                pthread_mutex_unlock(&mutex_connections);
                             }
                             else{
                                 r.socket_fd = i;
@@ -376,7 +379,7 @@ void* manager_thread_function(void* args){
                                 push_r(&r);
                                 pthread_cond_signal(&cond_var_request);
                             }
-                            pthread_mutex_unlock(&mutex_pipe_WM);
+                            pthread_mutex_unlock(&mutex_request);
                         }
                     }
                 }   
@@ -414,7 +417,7 @@ static void *sigHandler(void *arg) {
         case SIGINT:
         case SIGHUP:
         case SIGQUIT:
-            pthread_mutex_lock(&mutex_pipe_signal);
+            pthread_mutex_lock(&mutex_pipe_signal);;
             if((b = writen(signal_pipe[1],&sig,sizeof(int))) == -1){
                 perror("Errore writen signalpipe");
                 exit(EXIT_FAILURE);
@@ -430,13 +433,21 @@ static void *sigHandler(void *arg) {
 
 void* worker_thread_function(void* args){
     while (1){
-        request *r;
-        memset(&r,0,sizeof(r));        
         pthread_mutex_lock(&mutex_request);
-        while(isEmpty_r()) pthread_cond_wait(&cond_var_request,&mutex_request);
+
         if(flag_closeServer){
             pthread_mutex_unlock(&mutex_request);
             pthread_exit(NULL);
+        }
+        request *r;
+        memset(&r,0,sizeof(r));   
+
+        while(isEmpty_r()){
+            if(flag_closeServer){
+                pthread_mutex_unlock(&mutex_request);
+                pthread_exit(NULL);
+            }
+            pthread_cond_wait(&cond_var_request,&mutex_request);
         }
         r = pop_r();
         pthread_mutex_unlock(&mutex_request);
@@ -454,7 +465,7 @@ void* worker_thread_function(void* args){
             exit(EXIT_FAILURE);
         }
         pthread_mutex_unlock(&mutex_pipe_WM);
-        free(r);
+        //free(r);
         
     }
 }
@@ -519,8 +530,8 @@ void do_task(request* r_from_client,response* feedback){
     default:
         break;
     }
-    print_storageServer(storage);
-    printf("\n\n");
+    //print_storageServer(storage);
+    //printf("\n\n");
     //PRINT_ERRNO("do task",errno);
 
 }
@@ -959,10 +970,8 @@ void create_FileLog(){
     fprintf(f,"Numero di file attualmente nel server : %d\n",storage.n_file);
     fprintf(f,"Numero di file massimo memorizzato nel server : %d\n",storage.stat_max_n_file);
     fprintf(f,"Memoria attualmente utilizzata in Mbytes nel file storage : %.4lf\n",bytesToMb(storage.memory_used));
-    fprintf(f,"Dimensione massima in Kbytes raggiunta dal file storage : %.2lf\n",bytesToKb(storage.stat_dim_file));
-    fprintf(f,"Numero di volte in cui l’algoritmo di rimpiazzamento della cache è stato eseguito per selezionare uno o più \
-    file “vittima” : %d\n",storage.stat_n_replacing_algoritm); 
-
+    fprintf(f,"Dimensione massima in Kbytes raggiunta dal file storage : %lf\n",bytesToKb(storage.stat_dim_file));
+    fprintf(f,"Numero di volte in cui l’algoritmo di rimpiazzamento della cache è stato eseguito per selezionare uno o più file “vittima” : %d\n",storage.stat_n_replacing_algoritm); 
     fprintf(f,"Lista dei file contenuti nello storage al momento della chiusura del server:\n\n");
 	for (int i=0; i <= storage.len; i++){
 		if(storage.cell[i].head != NULL){

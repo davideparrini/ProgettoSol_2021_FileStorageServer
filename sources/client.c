@@ -33,7 +33,7 @@ int main(int argc, char *argv[]){
     strcat(testDirPath,PATHCWD);
     strcat(testDirPath,test);
     socket_path = malloc(sizeof(char)*MAX_SOCKET_PATH);
-    memset(socket_path,0,strlen(socket_path ));
+    memset(socket_path,0,sizeof(char)*MAX_SOCKET_PATH);
     
     struct timespec timer_connection = {20,0};
     time_t msec = 100;
@@ -255,6 +255,7 @@ int main(int argc, char *argv[]){
         default:
             break;
         }
+
         free_char_t(c);
         msleep(msec_between_req);  
     }
@@ -398,20 +399,22 @@ int arg_W(char* s,char* dir_rejectedFile){
 int arg_r(char* s,char* dirname){
     char* token = strtok(s,",");
     char *absPath = malloc(sizeof(char) * NAME_MAX);
-    memset(&absPath,0, sizeof(absPath) );
+    memset(absPath,0, sizeof(char) * NAME_MAX);
     int esito = 0;
     size_t read_bytes = 0;
     if(dirname != NULL){
         findDir_getAbsPath(testDirPath, dirname, &absPath);
     }
     while(token != NULL && !esito){
-        void* buff;
-        size_t size;
-        char* buf = malloc(sizeof(char) * NAME_MAX);
-        findFile_getAbsPath(testDirPath,token,&buf);
-        if(!strlen(buf)) esito = -1;
+        void* buff = NULL;
+        size_t size = 0;
+        
+        char* path = malloc(sizeof(char) * NAME_MAX);
+        findFile_getAbsPath(testDirPath,token,&path);
+        if(!strlen(path)) esito = -1;
         else{
-            if((esito = readFile(buf,&buff,&size)) == -1){
+            
+            if((esito = readFile(path,&buff,&size)) == -1){
                 perror("Errore readFile");
             }
             if(!esito){
@@ -442,9 +445,8 @@ int arg_r(char* s,char* dirname){
         }
         read_bytes += size;
         size = 0;   
-        free(buf); 
+        free(path); 
         free(buff);
-        
         token = strtok(NULL,",");
     }
     free(absPath); 
@@ -453,7 +455,7 @@ int arg_r(char* s,char* dirname){
         time_t t_op = time(NULL);
         PRINT_OP("readFile",s,&t_op,esito,read_bytes);
     } 
-    return esito;
+    return 1;
 }
 int arg_R(int n, char* dirname){
     int termina = 0,esito = 0,nzero = 0;
