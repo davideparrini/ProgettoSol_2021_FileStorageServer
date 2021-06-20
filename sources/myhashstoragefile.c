@@ -8,10 +8,11 @@ file_t* init_file(char *namefile){
 	}
 	file_t* new = malloc(sizeof(file_t));
 	memset(new,0,sizeof(file_t));
+	new->fd = -2;
 	new->abs_path= malloc(sizeof(char)*NAME_MAX);
 	memset(new->abs_path,0,sizeof(new->abs_path));
 	strncpy(new->abs_path,namefile,NAME_MAX);
-	new->fd = -2;
+	new->content = NULL;
 	new->dim_bytes = 0;
 	new->modified_flag = 0;
 	new->open_flag = 0;
@@ -140,6 +141,7 @@ void ins_file_hashtable(hashtable *table, file_t* file){
 	size_t h = hash(*table,file->abs_path);
     ins_tail_list(&table->cell[h],file);   
 	table->n_file++;
+	if(!file->locked_flag && file->open_flag) table->n_files_free++;
 	if(table->stat_max_n_file < table->n_file) table->stat_max_n_file = table->n_file;
 }
 
@@ -392,8 +394,9 @@ int ins_file_server(hashtable* table, file_t *f,list* list_reject){
     }
 	
     if((table->memory_used + s.st_size) <= table->memory_capacity){
-		table->memory_used += s.st_size;
         if(!writeContentFile(f)) return 0;
+		table->memory_used += s.st_size;
+		table->n_files_free++;
 		return 1;
     }
 	if(table->n_file_modified == 0){
@@ -469,7 +472,7 @@ int ins_file_server(hashtable* table, file_t *f,list* list_reject){
 	if(!writeContentFile(f)) return 0;
 	table->stat_n_replacing_algoritm++;
 	table->memory_used += f->dim_bytes;
-	ins_file_hashtable(table,f);
+	table->n_files_free++;
 	if(f->dim_bytes > table->stat_dim_file) table->stat_dim_file = f->dim_bytes;
 	return 1;
 }
@@ -619,7 +622,7 @@ void free_duplist(dupFile_list* dl){
 		dl->size--;
 		free(temp);
 	}
-	free(dl);
+	//free(dl);
 }
 int isEmpty_duplist(dupFile_list dl){
 	if(dl.head == NULL) return 1;

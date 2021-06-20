@@ -72,8 +72,9 @@ typedef struct S{
 
 #define PRINT_OP(nome_operazione,file_riferimento,orario,esito,bytes) \
     printf("Tipo operazione: %s\nSul file: %s\nData/Ora: %sEsito: ",nome_operazione,file_riferimento,ctime(orario) );\
-    if(!esito){ \
-        printf("Successo!\n"); \
+    if(esito >= 0){ \
+        if(!esito) printf("Successo!\n");                   \
+        else printf("Successo, N_files letti %d\n",esito); \
         if(bytes != 0) printf("bytes letti/scritti : %lubytes\n\n",(unsigned long)bytes);        \
         else printf("\n");        \
     }           \

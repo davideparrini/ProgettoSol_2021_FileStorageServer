@@ -556,7 +556,6 @@ int task_openFile(request* r, response* feedback){
             }
             else{
                 feedback->type =  O_CREATE_SUCCESS;
-                storage.n_files_free++;
                 if((f->fd = open(f->abs_path, O_RDWR|O_CREAT,0777)) == -1){
                     perror("Errore open in task_open");
                     feedback->type = GENERIC_ERROR;
@@ -637,8 +636,7 @@ int task_openFile(request* r, response* feedback){
             if(f->locked_flag == 1) feedback->type = CANNOT_ACCESS_FILE_LOCKED;
             else{
                 if(f->open_flag != 1){
-                    f->open_flag = 1;
-                    storage.n_files_free++;  
+                    f->open_flag = 1;  
                     if((f->fd = open(f->abs_path, O_RDWR)) == -1){
                         perror("Errore open in task_open");
                         feedback->type = GENERIC_ERROR;
@@ -729,8 +727,9 @@ int task_read_N_file(request* r, response* feedback){
     if(writen(r->socket_fd,&n_to_read,sizeof(int)) == -1){
         errno = EAGAIN;
     }
+    printf("r->dirname %s\n",r->dirpath);
     size_t h = 0;
-    size_t contatore_file_letti = 0; 
+    int contatore_file_letti = 0; 
     dupFile_list d_list;
     init_dupFile_list(&d_list);   
     while(n_to_read > 0 && h <= storage.len){
@@ -738,33 +737,41 @@ int task_read_N_file(request* r, response* feedback){
 			list temp = storage.cell[h];
 			while(temp.head != NULL && n_to_read > 0){
                 if(temp.head->open_flag && !temp.head->locked_flag){
-                    void *buff = malloc(temp.head->dim_bytes + 1);
-                    memset(&buff,0,temp.head->dim_bytes);
-                    int l;
+                    size_t dim_toSend = 0;
+                    if(temp.head->content != NULL)  dim_toSend = temp.head->dim_bytes;
+
+                    if( writen(r->socket_fd, &dim_toSend, sizeof(size_t)) == -1){
+                        errno = EAGAIN;
+                        return 0;
+                    }
+
+                    char buff[dim_toSend]; 
+                    memset(buff,0,dim_toSend);
+
+                    if(temp.head->content == NULL)  memcpy(buff,"*NO DATA IN FILE*",19);
+                    else  memcpy(buff ,temp.head->content, dim_toSend+ 1);
+                    if( writen( r->socket_fd, buff, dim_toSend + 1) == -1 ){
+                        perror("SEND CONTENT ERROR IN WRITEN");
+                        return 0;
+                    }
                     dupFile_t* df = init_dupFile(temp.head);
                     ins_head_dupFilelist(&d_list,df);
-                    while((l = read(temp.head->fd,buff,temp.head->dim_bytes)) > 0);
-                    if(l == -1){
-                        perror("lettura file in task_readNfile");
-                    }
-                    sendContent(r->socket_fd,buff,temp.head->dim_bytes,0);
                     contatore_file_letti++;
-                    free(buff);
+                    n_to_read--;
                 } 	
 				temp.head = temp.head->next;
 			}
 		}
         h++;   
     }
-    if(!strlen(r->dirpath)){
+    if(strlen(r->dirpath) != 0){
         createFiles_fromDupList_inDir(r->dirpath,&d_list);
     }
-
-    if(contatore_file_letti != r->c || n_to_read != 0){
+    if(n_to_read != 0){
         feedback->type = READ_N_FILE_FAILURE;    
     }
     else{
-        feedback->type = READ_FILE_SUCCESS;
+        feedback->type = READ_N_FILE_SUCCESS;
         feedback->c = contatore_file_letti;
         res = 1;
     }
@@ -1057,30 +1064,24 @@ void createFiles_fromDupList_inDir(char* dirname,dupFile_list* dl){
         char* s_file = strndup(temp->riferimento_file->abs_path,strlen(temp->riferimento_file->abs_path));
         char* namefile = basename(s_file);
         free(s_file);
-        char* newfile_path = strncat(s_dir,s_file,strlen(s_file));
-        free(namefile);
-        void* content = malloc(temp->riferimento_file->dim_bytes);
-        int fd_new,lung;
-        if((fd_new = open(newfile_path,O_WRONLY|O_CREAT|O_TRUNC)) == -1){
+        char* newfile_path = strncat(s_dir,namefile,strlen(namefile));
+        printf("PATH %s\n\n",newfile_path);
+        //free(namefile);
+        int fd_new;
+        if((fd_new = open(newfile_path,O_WRONLY|O_CREAT|O_TRUNC,0777)) == -1){
             perror("Errore apertura in createFiles_fromDupList_inDir");
             exit(EXIT_FAILURE);
         }
-        while((lung = read(temp->riferimento_file->fd,content,sizeof(content))) > 0){
-            if( write(fd_new, content,lung) == -1){
-                perror("Errore wrtite in createFiles_fromDupList_inDir");
-                exit(EXIT_FAILURE);
-            }
-        }
-        if(lung == -1){
-            perror("Errore read in createFiles_fromDupList_inDir");
+
+        if( write( fd_new, temp->riferimento_file->content, temp->riferimento_file->dim_bytes+1 ) == -1){
+            perror("Errore wrtite in createFiles_fromDupList_inDir");
             exit(EXIT_FAILURE);
         }
         close(fd_new);
 
         dl->head = dl->head->next;
         dl->size --;
-        free(newfile_path);
-        free(content);
+        //free(newfile_path);
         free(temp);
     }
     free(s_dir);

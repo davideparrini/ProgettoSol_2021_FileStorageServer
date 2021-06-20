@@ -20,6 +20,7 @@
 
 extern char* socket_path;
 extern int client_fd;
+extern size_t print_bytes_readNFiles;
 
 int openConnection(const char* sockname, int msec, const struct timespec abstime){
     SA sockaddr;
@@ -198,7 +199,7 @@ int readFile(const char* pathname, void** buf, size_t* size){
 
         *size = len;
         *buf = malloc(len+1);
-        memset(*buf, 0, *size);
+        memset(*buf, 0, *size+1);
         memcpy(*buf,content,len+1);
     }
     if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
@@ -243,51 +244,47 @@ int readFile(const char* pathname, void** buf, size_t* size){
 
 }
 int readNFiles(int N, const char* dirname){
-    int b;
     request r;
     response feedback;
     memset(&r,0,sizeof(request));
     memset(&r.dirpath,0,sizeof(r.dirpath));
     memset(&feedback, 0, sizeof(response));
-
-
-    if(dirname != NULL){
-        strncpy(r.dirpath,dirname,NAME_MAX);
-    }
+    strncpy(r.dirpath,dirname,NAME_MAX);
     
     r.type = READ_N_FILE; 
     r.c = N;
 
-    if(b = writen(client_fd,&r,sizeof(r)) == -1){
+    if(writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
         return -1;
     }
 
     int n_to_read;
-    if(b = readn(client_fd,&n_to_read,sizeof(int)) == -1){
+    if(readn(client_fd,&n_to_read,sizeof(int)) == -1){
         errno = EAGAIN;
         return -1;
     }
     int i = 1;
     while(i <= n_to_read){
         size_t buff_size;
-        if(b = readn(client_fd,&buff_size,sizeof(size_t)) == -1){
+        if(readn(client_fd,&buff_size,sizeof(size_t)) == -1){
             errno = EAGAIN;
         }
+        print_bytes_readNFiles += buff_size;
+        if(!buff_size) buff_size = 18;
         char content[buff_size];
         memset(content,0,buff_size);
-        if(b = readn(client_fd,&content,buff_size) == -1){
+        if(readn(client_fd,&content,buff_size+1) == -1){
             errno = EAGAIN;
         }
         printf("****Contenuto file %d :****\n%s\n\n",i,content);
         i++;
     }
 
-    if(b = readn(client_fd,&feedback,sizeof(feedback)) == -1){
+    if(readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
         return -1;
     }
-
     switch (feedback.type){
     case READ_N_FILE_FAILURE:
         errno = EPERM;

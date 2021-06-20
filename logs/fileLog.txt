@@ -1,6 +1,6 @@
 Numero di file attualmente nel server : 1
 Numero di file massimo memorizzato nel server : 1
-Memoria attualmente utilizzata in Mbytes nel file storage : 0.0022
+Memoria attualmente utilizzata in Mbytes nel file storage : 0.0008
 Dimensione massima in Kbytes raggiunta dal file storage : 0.000000
 Numero di volte in cui l’algoritmo di rimpiazzamento della cache è stato eseguito per selezionare uno o più file “vittima” : 0
 Lista dei file contenuti nello storage al momento della chiusura del server:
@@ -11,7 +11,7 @@ Lista file vittima dell'algoritmo di rimpiazzamento:
 Numero di operazioni di openFile : 1
 Numero di operazioni di closeFile : 0
 Numero di operazioni di readFile : 0
-Numero di operazioni di readNFile : 0
+Numero di operazioni di readNFile : 1
 Numero di operazioni di writeFile : 1
 Numero di operazioni di appendFile : 0
 Numero di operazioni di removeFile : 0

@@ -10,6 +10,8 @@ int client_fd;
 static int flag_stamp_op = 0;
 static int msec_between_req = 0;
 
+size_t print_bytes_readNFiles = 0;
+
 int arg_h(char* s);
 int arg_f(char* newsock,char* oldsock);
 int arg_w(char* s,char* dir_rejectedFile);
@@ -24,7 +26,6 @@ int arg_c(char* s);
 int arg_p();
 
 int arg_o(char* s);
-int arg_O(int n);
 int arg_a(char* s);
 int arg_C(char* s);
 
@@ -135,10 +136,6 @@ int main(int argc, char *argv[]){
             push_char(opt,optarg);
             break;
 
-        case 'O': 
-            push_char(opt,optarg);
-            break;
-
         case 'a': 
             push_char(opt,optarg);
             break;
@@ -149,20 +146,15 @@ int main(int argc, char *argv[]){
 
         case ':': 
             if(optopt == 'R'){
-                push_char(opt,"0");
-                break;
-            }
-            if(optopt == 'O'){
-                push_char(opt,"0");
+                push_char(optopt,"0");
                 break;
             }
             if(optopt == 't'){
-                int n = 0;
-                arg_t(n);
+                arg_t(0);
                 break;
             }
 
-            printf( "l'opzione '-%c' richiede un argomento\n", optopt);
+            printf( "l'opzione '-%c' richiede un argomento\n", opt);
             break;
 
         case '?': 
@@ -215,7 +207,10 @@ int main(int argc, char *argv[]){
 
         case 'R':
             if(c->next != NULL){
-                if(c->next->opt == 'd') arg_R(atoi(c->optarg),c->next->optarg);
+                if(c->next->opt == 'd'){
+                    printf("sono qua\n\n\n\n\n\n");
+                    arg_R(atoi(c->optarg),c->next->optarg);
+                }
                 else arg_R(atoi(c->optarg),NULL);
             }   
             else arg_R(atoi(c->optarg),NULL);
@@ -238,10 +233,6 @@ int main(int argc, char *argv[]){
 
         case 'o': 
             arg_o(c->optarg);
-            break;
-
-        case 'O': 
-            arg_O(atoi(c->optarg));
             break;
 
         case 'a': 
@@ -423,7 +414,7 @@ int arg_r(char* s,char* dirname){
                     char *dup = strndup(absPath,NAME_MAX);
                     strcat(dup,token);
                     int new_fd;            
-                    if((new_fd = open(dup,O_WRONLY|O_CREAT|O_EXCL,0777)) == -1){
+                if((new_fd = open(dup,O_WRONLY|O_CREAT|O_TRUNC,0777)) == -1){
                         perror("Errore creazione file in arg_r");
                         esito = -1;
                     }
@@ -458,22 +449,20 @@ int arg_r(char* s,char* dirname){
     return 1;
 }
 int arg_R(int n, char* dirname){
-    int termina = 0,esito = 0,nzero = 0;
+    int esito = 0;
     char* bufdir = malloc(sizeof(char) * NAME_MAX);
-    if(nzero == 0) nzero = 1;
-    while(!termina && n > 0){
-
-    }
+    memset(bufdir,0, sizeof(char) * NAME_MAX);
+    printf("dir %s\n\n",dirname);
     if(dirname != NULL){
-        findFile_getAbsPath(testDirPath,dirname,&bufdir);
+        findDir_getAbsPath(testDirPath,dirname,&bufdir);
     }
     if((esito = readNFiles(n,bufdir)) == -1){
-        perror("readNFile arg_r");
+        perror("readNFile arg_R");
     }
     if(flag_stamp_op){
         time_t t_op = time(NULL);
-        size_t size = 0;
-        PRINT_OP("arg_R","N file",&t_op,esito,size);
+        PRINT_OP("readNFile arg_R","N files",&t_op,esito,print_bytes_readNFiles);
+        print_bytes_readNFiles = 0;
     } 
     free(bufdir);
     return esito;
@@ -481,6 +470,7 @@ int arg_R(int n, char* dirname){
 
 int arg_t(int mill_sec){
     msec_between_req = mill_sec;
+    printf("Attesa tra una richiesta e l'altra di %d msec\n",msec_between_req);
     return 0;
 }
 
@@ -546,14 +536,7 @@ int arg_o(char* s){
     }
     return esito; 
 }
-int arg_O(int n){
-    int esito = 0, termina = 0, nzero = 0;
-    if(n == 0) nzero = 1;
-    while(!termina && n > 0){
-        
-    }
-    return esito;
-}
+
 
 int arg_a(char* s){
     int esito = 0;
