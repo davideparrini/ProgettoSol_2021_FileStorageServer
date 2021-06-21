@@ -59,15 +59,15 @@ int task_openFile(request* r, response* feedback);
 int task_read_file(request* r, response* feedback);
 int task_read_N_file(request* r, response* feedback);
 int task_write_file(request* r, response* feedback);
-int task_append_file(request* r, response* feedback);
-int task_unlock_file(request* r, response* feedback);
+//int task_append_file(request* r, response* feedback);
+//int task_unlock_file(request* r, response* feedback);
 int task_close_file(request* r, response* feedback);
 int task_remove_file(request* r, response* feedback);
 void showDirLogs();
 void setLogFile();
 void create_FileLog();
-void createFiles_inDir(char* dirname,list* l);
-void createFiles_fromDupList_inDir(char* dirname,dupFile_list* l);
+
+int sendlistFiletoReject(list removed_files,int fd_toSend);
 void init_Stats();
 
 int main(int argc, char *argv[]){
@@ -516,15 +516,15 @@ void do_task(request* r_from_client,response* feedback){
         break;
     
     case LOCK_FILE:
-        if(task_lock_file(r_from_client,feedback)){
-            stats_op.n_lockfile++;
-        }  
+        //if(task_lock_file(r_from_client,feedback)){
+       //     stats_op.n_lockfile++;
+       // }  
         break;
     
     case UNLOCK_FILE:
-        if(task_unlock_file(r_from_client,feedback)){
-            stats_op.n_unlockfile++;
-        }  
+        //if(task_unlock_file(r_from_client,feedback)){
+        //    stats_op.n_unlockfile++;
+        //}  
         break;
     
     default:
@@ -703,15 +703,14 @@ int task_read_file(request* r, response* feedback){
             return 0;
         }
 
-        char buffer[f->dim_bytes];
+        char buffer[f->dim_bytes-1];
         memset(buffer,0,f->dim_bytes);
-        memcpy(buffer,f->content,f->dim_bytes+1);
+        memcpy(buffer,f->content,f->dim_bytes);
 
-        if(writen(r->socket_fd,buffer,f->dim_bytes+1) == -1){
+        if(writen(r->socket_fd,buffer,f->dim_bytes) == -1){
             perror("SEND CONTENT ERROR IN WRITEN");
             return 0;
         }
-
         feedback->type = READ_FILE_SUCCESS;
         feedback->size = f->dim_bytes;
         return 1;
@@ -720,23 +719,30 @@ int task_read_file(request* r, response* feedback){
 
 int task_read_N_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
-    int res = 0,n_to_read;
+    int n_to_read;
     if(r->c <= 0 || r->c >= storage.n_files_free) n_to_read = storage.n_files_free;
     else n_to_read = r->c;
 
     if(writen(r->socket_fd,&n_to_read,sizeof(int)) == -1){
         errno = EAGAIN;
     }
-    printf("r->dirname %s\n",r->dirpath);
+
     size_t h = 0;
     int contatore_file_letti = 0; 
-    dupFile_list d_list;
-    init_dupFile_list(&d_list);   
+
     while(n_to_read > 0 && h <= storage.len){
         if(storage.cell[h].head != NULL){
 			list temp = storage.cell[h];
 			while(temp.head != NULL && n_to_read > 0){
                 if(temp.head->open_flag && !temp.head->locked_flag){
+
+                    char namefile[NAME_MAX];
+                    strncpy(namefile,temp.head->abs_path,NAME_MAX);
+                    if( writen( r->socket_fd, namefile, NAME_MAX + 1) == -1 ){
+                        perror("Errore mentre spedisco il nome del file in readNFiles");
+                        return 0;
+                    }
+
                     size_t dim_toSend = 0;
                     if(temp.head->content != NULL)  dim_toSend = temp.head->dim_bytes;
 
@@ -745,17 +751,17 @@ int task_read_N_file(request* r, response* feedback){
                         return 0;
                     }
 
-                    char buff[dim_toSend]; 
+                    char buff[dim_toSend-1]; 
                     memset(buff,0,dim_toSend);
 
                     if(temp.head->content == NULL)  memcpy(buff,"*NO DATA IN FILE*",19);
-                    else  memcpy(buff ,temp.head->content, dim_toSend+ 1);
-                    if( writen( r->socket_fd, buff, dim_toSend + 1) == -1 ){
-                        perror("SEND CONTENT ERROR IN WRITEN");
+                    else  memcpy(buff ,temp.head->content, dim_toSend);
+                    
+                    if( writen( r->socket_fd, buff, dim_toSend) == -1 ){
+                        perror("Errore writen send content ");
                         return 0;
                     }
-                    dupFile_t* df = init_dupFile(temp.head);
-                    ins_head_dupFilelist(&d_list,df);
+            
                     contatore_file_letti++;
                     n_to_read--;
                 } 	
@@ -764,47 +770,48 @@ int task_read_N_file(request* r, response* feedback){
 		}
         h++;   
     }
-    if(strlen(r->dirpath) != 0){
-        createFiles_fromDupList_inDir(r->dirpath,&d_list);
-    }
     if(n_to_read != 0){
-        feedback->type = READ_N_FILE_FAILURE;    
+        feedback->type = READ_N_FILE_FAILURE;  
+        return 0;  
     }
     else{
         feedback->type = READ_N_FILE_SUCCESS;
         feedback->c = contatore_file_letti;
-        res = 1;
+        return 1;
     }
-
-    free_duplist(&d_list);
-    return res;
 }
+
 int task_write_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 
-    int res = 0;
     file_t* f = research_file(storage,r->pathfile);
     if(f == NULL){
         feedback->type = FILE_NOT_EXIST;
+        return 0;
     }
     else{
         if(!f->locked_flag || !f->open_flag || !f->o_create_flag){
             feedback->type = WRITE_FILE_FAILURE;
+            return 0;
         }
         else{
             list removed_files;
+            init_list(&removed_files);
             if(ins_file_server(&storage,f,&removed_files)){
-                feedback->type = WRITE_FILE_SUCCESS;
-                res = 1;
-                if(strlen(r->dirpath) != 0){
-                    createFiles_inDir(r->dirpath,&removed_files);
+                if(r->flags){
+                    if(!sendlistFiletoReject(removed_files,r->socket_fd)){
+                        feedback->type =  CANNOT_SEND_FILES_REJECTED_BY_SERVER;
+                        return 0;
+                    }
                 }
-                else concatList(&files_rejected,&removed_files);    
+                feedback->type = WRITE_FILE_SUCCESS;
+                return 1;  
             }
-            else feedback->type = NO_SPACE_IN_SERVER;    
+            else{
+                feedback->type = NO_SPACE_IN_SERVER;    
+                return 0;
+            }
         }
     }
-
-    return res;
 }
 int task_append_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
@@ -838,7 +845,9 @@ int task_append_file(request* r, response* feedback){
         if(!flagsOk) return 0;
 
         pthread_mutex_lock(&mutex_file);
-        if(modifying_file(&storage,file,r->request_size,&files_rejected)){
+        list removed_files;
+        init_list(&removed_files);
+        if(modifying_file(&storage,file,r->request_size,&removed_files)){
             
             if(fcntl(file->fd,F_SETFL,O_RDWR|O_APPEND) == -1){
                 perror("Errore set flag in task_appendFile");
@@ -846,20 +855,18 @@ int task_append_file(request* r, response* feedback){
                 return 0;
             }
 
-            char content[r->request_size+1];
-            memset(content,0,r->request_size+1);
+            char content[r->request_size-1];
+            memset(content,0,r->request_size);
 
-            if(readn(r->socket_fd,&content,r->request_size+1) == -1){
+            if(readn(r->socket_fd,&content,r->request_size) == -1){
                 perror("GET CONTENT ERROR IN WRITEN 2");
                 feedback->type = GENERIC_ERROR;
                 fcntl(file->fd,F_SETFL,O_RDWR);
                 pthread_mutex_unlock(&mutex_file);
                 return 0;
             }
-            file->content = malloc(r->request_size);
-            memset(file->content,0,r->request_size);
-            memcpy(file->content, content,r->request_size+1);
-
+            appendContent(file,content,r->request_size);
+            
             if(write(file->fd,content,r->request_size) < 0){
                 perror("Errore scrittura file in task_appendToFile");
                 feedback->type = GENERIC_ERROR;
@@ -873,17 +880,25 @@ int task_append_file(request* r, response* feedback){
                 pthread_mutex_unlock(&mutex_file); 
                 return 0;
             }
+            pthread_mutex_unlock(&mutex_file);
 
-            feedback->type = APPEND_FILE_SUCCESS;
-            pthread_mutex_unlock(&mutex_file);   
+           
+            if(r->flags){
+                if(!sendlistFiletoReject(removed_files,r->socket_fd)){
+                    feedback->type =  CANNOT_SEND_FILES_REJECTED_BY_SERVER; 
+                    return 0;
+                }
+            }
+            feedback->type = APPEND_FILE_SUCCESS;  
+            return 1;
         }
         else{
-            feedback->type = NO_SPACE_IN_SERVER;
-            pthread_mutex_unlock(&mutex_file);   
+            pthread_mutex_unlock(&mutex_file); 
+            feedback->type = NO_SPACE_IN_SERVER;  
             return 0;
         }         
     }
-    return 1;
+    return 0;
 }
 
 int task_unlock_file(request* r, response* feedback){
@@ -1014,79 +1029,6 @@ void create_FileLog(){
 }
 
 
-void createFiles_inDir(char* dirname,list* l){
-  //crea file nella directory dirname, dirname deve essere il path assoluto della directory
-  //i file sono passati dalla list l
-    char* s_dir = strndup(dirname,strlen(dirname));
-    strncat(s_dir,"/",2);
-    while(!isEmpty(*l)){
-        file_t *temp = l->head;
-        char* s_file = strndup(temp->abs_path,strlen(temp->abs_path));
-        char* namefile = basename(s_file);
-        free(s_file);
-        char* newfile_path = strncat(s_dir,s_file,strlen(s_file));
-        free(namefile);
-        void* content = malloc(temp->dim_bytes);
-        int fd_new,lung;
-        if((fd_new = open(newfile_path,O_WRONLY|O_CREAT|O_TRUNC,0777)) == -1){
-            perror("Errore apertura in createFiles_fromDupList_inDir");
-            exit(EXIT_FAILURE);
-        }
-        while((lung = read(temp->fd,content,sizeof(content))) > 0){
-            if( write(fd_new, content,lung) == -1){
-                perror("Errore wrtite in createFiles_fromDupList_inDir");
-                exit(EXIT_FAILURE);
-            }
-        }
-        if(lung == -1){
-            perror("Errore read in createFiles_fromDupList_inDir");
-            exit(EXIT_FAILURE);
-        }
-        close(fd_new);
-        free(newfile_path);
-        free(content);
-        l->head = l->head->next;
-        l->size--;
-    }
-  free(s_dir);
-
-}
-
-void createFiles_fromDupList_inDir(char* dirname,dupFile_list* dl){
-  //crea file nella directory dirname, dirname deve essere il path assoluto della directory
-  //i file sono passati dalla dupFile_list l
-  
-    char* s_dir = strndup(dirname,strlen(dirname));
-    strcat(s_dir,"/");
-
-    while(!isEmpty_duplist(*dl)){
-        dupFile_t *temp = dl->head;
-        char* s_file = strndup(temp->riferimento_file->abs_path,strlen(temp->riferimento_file->abs_path));
-        char* namefile = basename(s_file);
-        free(s_file);
-        char* newfile_path = strncat(s_dir,namefile,strlen(namefile));
-        printf("PATH %s\n\n",newfile_path);
-        //free(namefile);
-        int fd_new;
-        if((fd_new = open(newfile_path,O_WRONLY|O_CREAT|O_TRUNC,0777)) == -1){
-            perror("Errore apertura in createFiles_fromDupList_inDir");
-            exit(EXIT_FAILURE);
-        }
-
-        if( write( fd_new, temp->riferimento_file->content, temp->riferimento_file->dim_bytes+1 ) == -1){
-            perror("Errore wrtite in createFiles_fromDupList_inDir");
-            exit(EXIT_FAILURE);
-        }
-        close(fd_new);
-
-        dl->head = dl->head->next;
-        dl->size --;
-        //free(newfile_path);
-        free(temp);
-    }
-    free(s_dir);
-}
-
 void init_Stats(stats* statistiche_operazioni){
 
     statistiche_operazioni->n_openfile = 0;
@@ -1099,5 +1041,43 @@ void init_Stats(stats* statistiche_operazioni){
     statistiche_operazioni->n_lockfile = 0;
     statistiche_operazioni->n_unlockfile = 0;
 
+}
+
+
+int sendlistFiletoReject(list removed_files,int fd_toSend){
+
+    int nToSend = removed_files.size;
+    if(writen(fd_toSend,&nToSend,sizeof(int)) == -1){
+        perror("Errore writen nToSend in writeFile");
+        return 0;
+    }
+    while(nToSend > 0){
+		file_t* temp = removed_files.head;
+        char pathfile[NAME_MAX-1];
+        memset(pathfile,0,NAME_MAX);
+        strncpy(pathfile,temp->abs_path,NAME_MAX);
+
+        if(writen(fd_toSend,pathfile,NAME_MAX) == -1){
+            perror("Errore writen abspath in writeFile");
+            return 0;
+        }
+
+        if(writen(fd_toSend,&temp->dim_bytes,sizeof(size_t)) == -1){
+            perror("Errore writen size in writeFile");
+            return 0;
+        }
+
+        char content[temp->dim_bytes-1];
+        memset(content,0,temp->dim_bytes);
+        memcpy(content,temp->content,temp->dim_bytes);
+        if(writen(fd_toSend,&content,temp->dim_bytes) == -1){
+            perror("Errore writen content in writeFile");
+            return 0;
+        }
+		
+		removed_files.head = removed_files.head->next;
+		free_file(temp);
+    }
+    return 1;
 }
 

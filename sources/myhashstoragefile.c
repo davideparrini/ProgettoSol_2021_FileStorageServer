@@ -1,5 +1,5 @@
 #include <myhashstoragefile.h>
-
+#include <utils.h>
 
 file_t* init_file(char *namefile){
 	if(namefile == NULL){
@@ -47,6 +47,26 @@ int writeContentFile(file_t* f){
 	f->dim_bytes = s.st_size;
 	return 1;
 }
+
+void appendContent(file_t * f,void *buff,size_t size){
+	if(f->content == NULL){
+		f->content = malloc(size);
+		memset(f->content,0,size);
+		memcpy(f->content,buff,size);
+		f->dim_bytes = size;
+	}
+	else{
+		char content[f->dim_bytes + size - 1];
+		memcpy(content,f->content,f->dim_bytes);
+		strncat(content,(char*)buff,size);
+		f->content = realloc(f->content,f->dim_bytes+size);
+		memset(f->content,0,f->dim_bytes+size);
+		memcpy(f->content,content,f->dim_bytes + size);
+		f->dim_bytes += size;
+	}
+
+}
+
 void init_list(list* l){
 	l->head = NULL;
 	l->tail = NULL;

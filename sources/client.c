@@ -4,7 +4,9 @@
 
 #define MAX_SOCKET_PATH 256
 #define PATHCWD "/mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer"
+char cwdPath[NAME_MAX];
 char testDirPath[NAME_MAX];
+char testToSaveDirPath[NAME_MAX];
 char* socket_path;
 int client_fd;
 static int flag_stamp_op = 0;
@@ -26,13 +28,21 @@ int arg_c(char* s);
 int arg_p();
 
 int arg_o(char* s);
-int arg_a(char* s);
+int arg_a(char* s,char* dirname);
 int arg_C(char* s);
 
 int main(int argc, char *argv[]){
+    
+    getcwd(cwdPath,NAME_MAX);
+    strcpy(testDirPath,cwdPath);
+    strcpy(testToSaveDirPath,cwdPath);
+
     char test[NAME_MAX] = {"/test"};
-    strcat(testDirPath,PATHCWD);
     strcat(testDirPath,test);
+    char testTosave[NAME_MAX] = {"/test_fileToSave"};
+    strcat(testToSaveDirPath,testTosave);
+
+
     socket_path = malloc(sizeof(char)*MAX_SOCKET_PATH);
     memset(socket_path,0,sizeof(char)*MAX_SOCKET_PATH);
     
@@ -208,7 +218,6 @@ int main(int argc, char *argv[]){
         case 'R':
             if(c->next != NULL){
                 if(c->next->opt == 'd'){
-                    printf("sono qua\n\n\n\n\n\n");
                     arg_R(atoi(c->optarg),c->next->optarg);
                 }
                 else arg_R(atoi(c->optarg),NULL);
@@ -236,7 +245,11 @@ int main(int argc, char *argv[]){
             break;
 
         case 'a': 
-            arg_a(c->optarg);
+            if(c->next != NULL){
+                if(c->next->opt == 'D') arg_a(c->optarg,c->next->optarg);
+                else arg_a(c->optarg,NULL);
+            }   
+            else arg_a(c->optarg,NULL);
             break;
 
         case 'C': 
@@ -291,15 +304,23 @@ int arg_w(char* s,char* dir_rejectedFile){
     size_t contatore_bytes_scritti = 0;
     char* dirname = strtok(s,",");
     char* dirpath = malloc(sizeof(char) * NAME_MAX);
+    memset(dirpath,0,sizeof(char) * NAME_MAX);
+
+    char* dir_rej_path = malloc(sizeof(char) * NAME_MAX);
+    memset(dir_rej_path,0,sizeof(char) * NAME_MAX);
+
     findDir_getAbsPath(testDirPath ,dirname,&dirpath);
 
+    if(dir_rejectedFile != NULL){
+        findDir_getAbsPath(testToSaveDirPath,dir_rejectedFile,&dir_rej_path);
+    }
     char* nfile = strtok(NULL,",");
     int n, flag_end = 0;
     if(nfile != NULL) n = atoi(nfile);
     else n = 0;
     if(n == 0) flag_end = 1;
 
-    esito = writeFileDir(dirpath,dir_rejectedFile,n,flag_end,&contatore_bytes_scritti,1);
+    esito = writeFileDir(dirpath,dir_rej_path,n,flag_end,&contatore_bytes_scritti,1);
     if(flag_stamp_op){
             time_t t_op = time(NULL);
             PRINT_OP("Writefile arg_w","writeNfile",&t_op,esito,contatore_bytes_scritti);
@@ -308,52 +329,6 @@ int arg_w(char* s,char* dir_rejectedFile){
     return esito;
 }
 
-int writeFileDir(char* dirpath,char* dir_rejectedFile,int n,int flag_end,size_t* written_bytes,int tutto_ok){
-    if(n == 0) return tutto_ok;
-
-    if (chdir(dirpath) == -1) {
-        printf("Errore cambio directory\n");
-        return 0;
-    }
-    DIR * dir;
-    if((dir = opendir(".")) == NULL){
-        perror("Aprendo cwd in writeFileDir");
-        return -1;
-    }
-    struct dirent *file;
-    while(n>0 && (errno=0, file = readdir(dir)) != NULL) {  
-        struct stat statbuf;
-        if (stat(file->d_name, &statbuf)==-1) {	
-            perror("stat in writeFileDir");
-            return -1;
-        }    
-        if(S_ISDIR(statbuf.st_mode)){
-            if(!isdot(file->d_name)){
-                if(writeFileDir(file->d_name,dir_rejectedFile,n,flag_end,written_bytes,tutto_ok) != 0){
-                    if (chdir("..") == -1) {
-                        printf("Impossibile risalire alla directory padre.\n");
-                        return -1;
-                    }
-                }
-            }
-        }
-        else{
-            char* buf = malloc(sizeof(char) * NAME_MAX);
-            findFile_getAbsPath(testDirPath,file->d_name,&buf);
-            if(!writeFile(buf,dir_rejectedFile)){
-                *written_bytes += statbuf.st_size;
-                if(flag_end) n++;
-                n--;
-            }
-            else{
-                tutto_ok = 0;
-            }
-        }
-    }
-    if (errno != 0) perror("readdir in writeFileDir");
-    closedir(dir);
-    return 1;
-}
 int arg_W(char* s,char* dir_rejectedFile){
     int esito = 0;
     char* token = strtok(s,",");
@@ -361,14 +336,15 @@ int arg_W(char* s,char* dir_rejectedFile){
     struct stat statbuf;
 
     char* bufdir = malloc(sizeof(char) * NAME_MAX);
+    memset(bufdir,0,sizeof(char) * NAME_MAX);
     if(dir_rejectedFile != NULL){
-        findDir_getAbsPath(testDirPath,dir_rejectedFile,&bufdir);
+        findDir_getAbsPath(testToSaveDirPath,dir_rejectedFile,&bufdir);
     }
 
     while(token != NULL){
         char* buf = malloc(sizeof(char) * NAME_MAX);
         findFile_getAbsPath(testDirPath,token,&buf);
-        if((esito = writeFile(buf,dir_rejectedFile)) == -1){
+        if((esito = writeFile(buf,bufdir)) == -1){
             perror("Errore writeFile arg_W");
         }
         if (stat(buf, &statbuf)==-1) {	
@@ -389,12 +365,12 @@ int arg_W(char* s,char* dir_rejectedFile){
 
 int arg_r(char* s,char* dirname){
     char* token = strtok(s,",");
-    char *absPath = malloc(sizeof(char) * NAME_MAX);
-    memset(absPath,0, sizeof(char) * NAME_MAX);
+    char *dirPath = malloc(sizeof(char) * NAME_MAX);
+    memset(dirPath,0, sizeof(char) * NAME_MAX);
     int esito = 0;
     size_t read_bytes = 0;
     if(dirname != NULL){
-        findDir_getAbsPath(testDirPath, dirname, &absPath);
+        findDir_getAbsPath(testToSaveDirPath, dirname, &dirPath);
     }
     while(token != NULL && !esito){
         void* buff = NULL;
@@ -409,27 +385,23 @@ int arg_r(char* s,char* dirname){
                 perror("Errore readFile");
             }
             if(!esito){
-                printf("***Contenuto File***:\n%s\n\n",(char*)buff);  
+                printf("***Contenuto File '%s' ***:\n%s\n\n",token,(char*)buff);  
                 if(dirname != NULL){
-                    char *dup = strndup(absPath,NAME_MAX);
+
+                    char *dup = strndup(dirPath,NAME_MAX);
+                    strcat(dup,"/");
                     strcat(dup,token);
                     int new_fd;            
-                if((new_fd = open(dup,O_WRONLY|O_CREAT|O_TRUNC,0777)) == -1){
+                    if((new_fd = creat(dup,0777)) == -1){
                         perror("Errore creazione file in arg_r");
                         esito = -1;
                     }
-                    struct stat statbuf;
-                    if(stat(dup, &statbuf)==-1) {	
-                        perror("stat in arg_r");
+               
+                    if( write(new_fd,buff,size) == -1 ){
+                        perror("Errore scrittura file in arg_r");
                         esito = -1;
                     }
-                    if(!statbuf.st_size){
-                        if( write(new_fd,buff,size) == -1 ){
-                            perror("Errore scrittura file in arg_r");
-                        }
-                    }
-                    else printf("File %s già presente nella dir %s\n",token,dirname);
-                    free(dup);
+
                     close(new_fd);
                 }
             }
@@ -440,7 +412,7 @@ int arg_r(char* s,char* dirname){
         free(buff);
         token = strtok(NULL,",");
     }
-    free(absPath); 
+    free(dirPath); 
     free(token);
     if(flag_stamp_op){
         time_t t_op = time(NULL);
@@ -452,9 +424,8 @@ int arg_R(int n, char* dirname){
     int esito = 0;
     char* bufdir = malloc(sizeof(char) * NAME_MAX);
     memset(bufdir,0, sizeof(char) * NAME_MAX);
-    printf("dir %s\n\n",dirname);
     if(dirname != NULL){
-        findDir_getAbsPath(testDirPath,dirname,&bufdir);
+        findDir_getAbsPath(testToSaveDirPath,dirname,&bufdir);
     }
     if((esito = readNFiles(n,bufdir)) == -1){
         perror("readNFile arg_R");
@@ -538,19 +509,27 @@ int arg_o(char* s){
 }
 
 
-int arg_a(char* s){
+int arg_a(char* s,char* dirname){
     int esito = 0;
     char* token = strtok(s,":");
     char* content = strtok(NULL,"");
     char* buffer = malloc(sizeof(char) * NAME_MAX);
 
+    char* bufdir = malloc(sizeof(char) * NAME_MAX);
+    memset(bufdir,0,sizeof(char) * NAME_MAX);
+
+    if(dirname != NULL){
+        findDir_getAbsPath(testToSaveDirPath,dirname,&bufdir);
+    }
+
     findFile_getAbsPath(testDirPath,token,&buffer);
     if(!strlen(buffer)) esito = -1;
     else{
-        if(appendToFile(buffer,(void*)content,strlen(content),NULL) == -1){
+        if(appendToFile(buffer,(void*)content,strlen(content),bufdir) == -1){
             perror("Errore appendToFile");
             esito = -1;
         }
+
     }
     if(flag_stamp_op){
         time_t t_op = time(NULL);
@@ -578,4 +557,51 @@ int arg_C(char* s){
         free(buf);
     }
     return esito; 
+}
+
+int writeFileDir(char* dirpath,char* dir_rejectedFile,int n,int flag_end,size_t* written_bytes,int tutto_ok){
+    if(n == 0) return tutto_ok;
+
+    if (chdir(dirpath) == -1) {
+        printf("Errore cambio directory\n");
+        return 0;
+    }
+    DIR * dir;
+    if((dir = opendir(".")) == NULL){
+        perror("Aprendo cwd in writeFileDir");
+        return -1;
+    }
+    struct dirent *file;
+    while(n>0 && (errno=0, file = readdir(dir)) != NULL) {  
+        struct stat statbuf;
+        if (stat(file->d_name, &statbuf)==-1) {	
+            perror("stat in writeFileDir");
+            return -1;
+        }    
+        if(S_ISDIR(statbuf.st_mode)){
+            if(!isdot(file->d_name)){
+                if(writeFileDir(file->d_name,dir_rejectedFile,n,flag_end,written_bytes,tutto_ok) != 0){
+                    if (chdir("..") == -1) {
+                        printf("Impossibile risalire alla directory padre.\n");
+                        return -1;
+                    }
+                }
+            }
+        }
+        else{
+            char* buf = malloc(sizeof(char) * NAME_MAX);
+            findFile_getAbsPath(testDirPath,file->d_name,&buf);
+            if(!writeFile(buf,dir_rejectedFile)){
+                *written_bytes += statbuf.st_size;
+                if(flag_end) n++;
+                n--;
+            }
+            else{
+                tutto_ok = 0;
+            }
+        }
+    }
+    if (errno != 0) perror("readdir in writeFileDir");
+    closedir(dir);
+    return 1;
 }

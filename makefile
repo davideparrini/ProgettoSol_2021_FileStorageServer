@@ -23,7 +23,7 @@ client: $(CLIENT_DEPS)
 	$(CC) $(CFLAGS) $(INCLUDES) $(SRC)/client.c -o client -Wl,-rpath,$(LIBS) -L $(LIBS) -lclient -lapi $(THREAD_FLAGS)
 
 
-$(LIBS)/libapi.so: $(OBJS)/utils.o 
+$(LIBS)/libapi.so: $(OBJS)/utils.o
 	$(CC) $(CFLAGS) -shared -o $@ $^
 
 $(LIBS)/libclient.so: $(OBJS)/utils.o $(OBJS)/serverAPI.o $(OBJS)/myqueueopt.o
@@ -47,7 +47,7 @@ $(OBJS)/myhashstoragefile.o : $(SRC)/myhashstoragefile.c
 $(OBJS)/serverAPI.o : $(SRC)/serverAPI.c 
 	$(CC) $(C_FLAGS) $(INCLUDES)  $^ -c -fPIC -o $@
 
-$(OBJS)/utils.o : $(SRC)/utils.c
+$(OBJS)/utils.o : $(SRC)/utils.c 
 	$(CC) $(C_FLAGS) $(INCLUDES)  $^ -c -fPIC -o $@
 
 cleanall: 	
@@ -57,6 +57,9 @@ cleanall:
 	-rm -f $(OBJS)/*.o
 	-rm -f $(LIBS)/*.so
 	-rm -f ./logs/*
+	-rm -f ./test_fileToSave/test_D/*
+	-rm -f ./test_fileToSave/test-d/*
+	-rm -f ./test/*.txt
 	-rm /tmp/server_sock
 	-rm -f $(TARGETS)
 

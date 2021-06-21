@@ -62,6 +62,7 @@ typedef struct _hash{
 //inizializzazioni server
 file_t* init_file(char *namefile);
 int writeContentFile(file_t* f);
+void appendContent(file_t * f,void *buff,size_t size);
 void init_list(list* l);
 void init_hash(hashtable *table, config s);
 
@@ -112,4 +113,6 @@ dupFile_t* pop_dupFilelist(dupFile_list *cell);
 void ins_dupList_to_list(hashtable* table, list* l, dupFile_list* dl);
 void free_duplist(dupFile_list* dl);
 int isEmpty_duplist(dupFile_list dl);
+
+
 #endif

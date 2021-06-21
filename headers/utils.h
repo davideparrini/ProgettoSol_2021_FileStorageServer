@@ -41,7 +41,7 @@
 #define BUFSIZE 1024
 typedef struct sockaddr_un SA;
 
-typedef struct S{
+typedef struct config_{
     int n_thread_workers;
     int max_n_file;
     double memory_capacity;
@@ -95,6 +95,4 @@ size_t MbToBytes(double Mb);
 int findFile_getAbsPath(const char nomedir[], const char nomefile[],char **resolvedpath);
 int findDir_getAbsPath(const char dirPartenza[], const char dirToSearch[],char **resolvedpath);
 
-int sendContent(int socket_fd,void* content,size_t dim,int needFlagsOk);
-int getContent(int client_fd, void *buff);
 #endif 
