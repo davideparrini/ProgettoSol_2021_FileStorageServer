@@ -63,7 +63,7 @@ int main(int argc, char *argv[]){
     int termina = 0;
     int f = 0, h = 0,p = 0;
 
-    while((opt = getopt(argc, argv,"hf:w:W:D:r:R:d:t:l:u:c:po:O:a:C:")) != -1 && !termina){
+    while((opt = getopt(argc, argv,"hf:w:W:D:r:R::d:t::l:u:c:po:O:a:C:")) != -1 && !termina){
 
         switch (opt){
         case 'h': 
@@ -92,7 +92,7 @@ int main(int argc, char *argv[]){
             break;
 
         case 'D': 
-            if(temp_opt != 'w' && temp_opt != 'W'){
+            if(temp_opt != 'w' && temp_opt != 'W'&& temp_opt != 'a'){
                 printf("Errore! Opzione D non può essere utilizzata senza prima aver utilizzato -w o -W\n");
                 termina = 1;
                 break;
@@ -105,7 +105,8 @@ int main(int argc, char *argv[]){
             break;
 
         case 'R':
-            push_char(opt,optarg); 
+            if(optarg == NULL) push_char(opt,"0"); 
+            else push_char(opt,optarg); 
             break;
 
         case 'd': 
@@ -118,7 +119,8 @@ int main(int argc, char *argv[]){
             break;
 
         case 't': 
-            arg_t(atoi(optarg)); 
+            if(optarg == NULL) arg_t(0);
+            else arg_t(atoi(optarg)); 
             break;
 
         case 'l': 

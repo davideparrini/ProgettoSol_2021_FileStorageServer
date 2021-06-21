@@ -75,7 +75,7 @@ typedef struct config_{
     if(esito >= 0){ \
         if(!esito) printf("Successo!\n");                   \
         else printf("Successo, N_files letti %d\n",esito); \
-        if(bytes != 0) printf("bytes letti/scritti : %lubytes\n\n",(unsigned long)bytes);        \
+        if(bytes != 0) printf("bytes letti/scritti : %lu bytes\n\n",(unsigned long)bytes);        \
         else printf("\n");        \
     }           \
     else printf("Fallimento!\n\n")

@@ -566,8 +566,6 @@ void free_hash(hashtable *table){
 			free_list(&table->cell[i]);
 		}
 	}
-	//free(&table->cache);
-	//free(table);
 }
 
 void print_storageServer(hashtable table){

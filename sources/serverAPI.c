@@ -270,30 +270,35 @@ int readNFiles(int N, const char* dirname){
     int i = 1;
     while(i <= n_to_read){
 
-        char pathfile[NAME_MAX];
-        if(readn(client_fd,&pathfile,NAME_MAX+1) == -1){
+        char pathfile[NAME_MAX-1];
+        if(readn(client_fd,&pathfile,NAME_MAX) == -1){
             errno = EAGAIN;
         }
         char* namefile = basename(pathfile);
 
         size_t buff_size; 
-        if(readn(client_fd,&buff_size,sizeof(size_t)) == -1){
-            errno = EAGAIN;
-        }
-        print_bytes_readNFiles += buff_size;
-        if(!buff_size) buff_size = 18;
-        char content[buff_size-1];
-        memset(content,0,buff_size);
-        if(readn(client_fd,&content,buff_size) == -1){
+
+        if( readn( client_fd, &buff_size, sizeof(size_t) ) == -1){
             errno = EAGAIN;
         }
 
-        printf("****Contenuto file %d ' %s ':****\n%s\n\n",i,namefile,content);
+        print_bytes_readNFiles += buff_size;
+
+        if(!buff_size) buff_size = 18;
+
+        char content[buff_size-1];
+        memset(content,0,buff_size);
+
+        if( readn( client_fd, &content, buff_size +1) == -1){
+            errno = EAGAIN;
+        }
+
+        printf("****Contenuto file %d ' %s ':****\n%s\n\n", i, namefile, content);
         
         if(flag_dirname){
-            char* s_dir = strndup(dirname,strlen(dirname));
+            char* s_dir = strdup(dirname);
             strcat(s_dir,"/");
-            char* newfile_path = strncat(s_dir,namefile,strlen(namefile));
+            char* newfile_path = strcat(s_dir,namefile);
             int fd_new;
             if((fd_new = creat(newfile_path,0777)) == -1){
                 perror("Errore creazione file in readNfiles");

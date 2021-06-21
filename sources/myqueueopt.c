@@ -8,7 +8,7 @@ void init_char_q(char opt,char* optarg){
     memset(cq,0,sizeof(char_t));
 	cq->opt = opt;
     cq->optarg = malloc(sizeof(char)*(strlen(optarg)+1));
-    memset(cq->optarg,0,sizeof(cq->optarg));
+    memset(cq->optarg,0,sizeof(char)*(strlen(optarg)+1));
     strcpy(cq->optarg,optarg);
     head = cq;
     tail = cq;

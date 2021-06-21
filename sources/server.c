@@ -736,9 +736,9 @@ int task_read_N_file(request* r, response* feedback){
 			while(temp.head != NULL && n_to_read > 0){
                 if(temp.head->open_flag && !temp.head->locked_flag){
 
-                    char namefile[NAME_MAX];
+                    char namefile[NAME_MAX-1];
                     strncpy(namefile,temp.head->abs_path,NAME_MAX);
-                    if( writen( r->socket_fd, namefile, NAME_MAX + 1) == -1 ){
+                    if( writen( r->socket_fd, namefile, NAME_MAX) == -1 ){
                         perror("Errore mentre spedisco il nome del file in readNFiles");
                         return 0;
                     }
@@ -751,13 +751,13 @@ int task_read_N_file(request* r, response* feedback){
                         return 0;
                     }
 
-                    char buff[dim_toSend-1]; 
-                    memset(buff,0,dim_toSend);
+                    char buff[dim_toSend - 1]; 
+                    memset(buff, 0, dim_toSend);
 
-                    if(temp.head->content == NULL)  memcpy(buff,"*NO DATA IN FILE*",19);
-                    else  memcpy(buff ,temp.head->content, dim_toSend);
+                    if(temp.head->content == NULL)  memcpy(buff,"*NO DATA IN FILE*",18);
+                    else  memcpy(buff ,temp.head->content, dim_toSend +1);
                     
-                    if( writen( r->socket_fd, buff, dim_toSend) == -1 ){
+                    if( writen( r->socket_fd, buff, dim_toSend +1 ) == -1 ){
                         perror("Errore writen send content ");
                         return 0;
                     }
