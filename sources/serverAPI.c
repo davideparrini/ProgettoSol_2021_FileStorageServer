@@ -191,7 +191,7 @@ int readFile(const char* pathname, void** buf, size_t* size){
             exit(EXIT_FAILURE);
         }
         
-        char content[len-1];
+        char content[len];
         memset(content,0,len);
 
         if(readn(client_fd,&content,len) == -1){
@@ -262,7 +262,7 @@ int readNFiles(int N, const char* dirname){
         return -1;
     }
 
-    int n_to_read;
+    int n_to_read = 0;
     if(readn(client_fd,&n_to_read,sizeof(int)) == -1){
         errno = EAGAIN;
         return -1;
@@ -270,13 +270,13 @@ int readNFiles(int N, const char* dirname){
     int i = 1;
     while(i <= n_to_read){
 
-        char pathfile[NAME_MAX-1];
+        char pathfile[NAME_MAX];
         if(readn(client_fd,&pathfile,NAME_MAX) == -1){
             errno = EAGAIN;
         }
         char* namefile = basename(pathfile);
 
-        size_t buff_size; 
+        size_t buff_size = 0; 
 
         if( readn( client_fd, &buff_size, sizeof(size_t) ) == -1){
             errno = EAGAIN;
@@ -286,10 +286,10 @@ int readNFiles(int N, const char* dirname){
 
         if(!buff_size) buff_size = 18;
 
-        char content[buff_size-1];
+        char content[buff_size];
         memset(content,0,buff_size);
 
-        if( readn( client_fd, &content, buff_size +1) == -1){
+        if( readn( client_fd, &content, buff_size) == -1){
             errno = EAGAIN;
         }
 
@@ -310,6 +310,7 @@ int readNFiles(int N, const char* dirname){
                 exit(EXIT_FAILURE);
             }
             close(fd_new);
+            free(s_dir);
         }
         i++;
     }
@@ -420,7 +421,7 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
     }
 
     if(flags_ok){
-        char content[size-1]; 
+        char content[size]; 
         memset(content,0,size);
         memcpy(content,buf,size);
         if(writen(client_fd,content,size) == -1){

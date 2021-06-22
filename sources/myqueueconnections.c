@@ -5,7 +5,7 @@ static node_t *head = NULL;
 static node_t *tail = NULL;
 
 
-void init_q(int* client_socket){
+void init_q(int client_socket){
 
     node_t* q  = (node_t*) malloc(sizeof(node_t));
 	q->client_socket = client_socket;
@@ -14,7 +14,7 @@ void init_q(int* client_socket){
 	q->next = NULL;
 }
 
-void push_q(int *client_socket){
+void push_q(int client_socket){
      if(tail == NULL){
         init_q(client_socket); 
         return;
@@ -24,13 +24,12 @@ void push_q(int *client_socket){
     tail->next->next = NULL;
     tail = tail->next;
 }
-void removeConnection_q(int *client_socket){
+void removeConnection_q(int client_socket){
     node_t *cor = head;
     node_t *prec = NULL;
     while(cor != NULL){
         if(cor->client_socket == client_socket){
             if(prec != NULL) prec->next = cor->next;
-            free(cor->client_socket);
             free(cor);
             return;
         }

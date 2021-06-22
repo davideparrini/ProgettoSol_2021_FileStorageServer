@@ -34,9 +34,9 @@ int writeContentFile(file_t* f){
         perror("stat creazione file\n");
 		return 0;
     }
-	f->content = malloc(s.st_size);
-	memset(f->content,0,s.st_size);
-	while((l = read(f->fd,f->content,s.st_size)) > 0);
+	f->content = malloc(s.st_size+1);
+	memset(f->content,0,s.st_size+1);
+	while((l = read(f->fd,f->content,s.st_size+1)) > 0);
 	if(l == -1){
 		perror("lettura file in writeContentFile");
 		return 0;
@@ -50,18 +50,18 @@ int writeContentFile(file_t* f){
 
 void appendContent(file_t * f,void *buff,size_t size){
 	if(f->content == NULL){
-		f->content = malloc(size);
-		memset(f->content,0,size);
-		memcpy(f->content,buff,size);
+		f->content = malloc(size+1);
+		memset(f->content,0,size+1);
+		memcpy(f->content,buff,size+1);
 		f->dim_bytes = size;
 	}
 	else{
-		char content[f->dim_bytes + size - 1];
+		char content[f->dim_bytes + size];
 		memcpy(content,f->content,f->dim_bytes);
 		strncat(content,(char*)buff,size);
-		f->content = realloc(f->content,f->dim_bytes+size);
-		memset(f->content,0,f->dim_bytes+size);
-		memcpy(f->content,content,f->dim_bytes + size);
+		f->content = realloc(f->content,f->dim_bytes+size+1);
+		memset(f->content,0,f->dim_bytes+size+1);
+		memcpy(f->content,content,f->dim_bytes + size+1);
 		f->dim_bytes += size;
 	}
 
@@ -257,7 +257,7 @@ file_t* research_file(hashtable table,char *namefile){
 		return NULL;
 	}	
 	int h = hash(table,namefile);    
-	file_t* f;
+	file_t* f = NULL;
 	if((f = research_file_list(table.cell[h],namefile)) != NULL){
 		return f;
 	}
@@ -270,7 +270,7 @@ file_t* research_file(hashtable table,char *namefile){
 }
 
 file_t* research_file_list(list cell,char* namefile){
-	file_t* f;
+	file_t* f = NULL;
 	list temp = cell;
 	while(temp.head != NULL){
 		if(!strncmp(temp.head->abs_path,namefile,strlen(namefile))){
@@ -566,6 +566,8 @@ void free_hash(hashtable *table){
 			free_list(&table->cell[i]);
 		}
 	}
+	free(table->cell);
+	//free(table->cache);
 }
 
 void print_storageServer(hashtable table){

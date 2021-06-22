@@ -17,7 +17,6 @@ size_t print_bytes_readNFiles = 0;
 int arg_h(char* s);
 int arg_f(char* newsock,char* oldsock);
 int arg_w(char* s,char* dir_rejectedFile);
-int writeFileDir(char* dirpath,char* dir_rejectedFile,int n,int flag_end,size_t* written_bytes,int tutto_ok);
 int arg_W(char* s,char* dir_rejectedFile);
 int arg_r(char* s,char* dirname);
 int arg_R(int n,char* dirname);
@@ -28,8 +27,14 @@ int arg_c(char* s);
 int arg_p();
 
 int arg_o(char* s);
+int arg_O(char* s);
 int arg_a(char* s,char* dirname);
 int arg_C(char* s);
+int arg_G(char* s);
+
+int writeFileDir(char* dirpath,char* dir_rejectedFile,int n,int flag_end,size_t* written_bytes,int tutto_ok);
+int openFileDir(char* dirpath,int o_flag,int n,int flag_end,int tutto_ok);
+int closeFileDir(char* dirpath,int n,int flag_end,int tutto_ok);
 
 int main(int argc, char *argv[]){
     
@@ -148,11 +153,19 @@ int main(int argc, char *argv[]){
             push_char(opt,optarg);
             break;
 
+        case 'O': 
+            push_char(opt,optarg);
+            break;
+
         case 'a': 
             push_char(opt,optarg);
             break;
 
         case 'C': 
+            push_char(opt,optarg);
+            break;
+
+        case 'G': 
             push_char(opt,optarg);
             break;
 
@@ -246,6 +259,10 @@ int main(int argc, char *argv[]){
             arg_o(c->optarg);
             break;
 
+        case 'O': 
+            arg_O(c->optarg);
+            break;
+
         case 'a': 
             if(c->next != NULL){
                 if(c->next->opt == 'D') arg_a(c->optarg,c->next->optarg);
@@ -256,6 +273,10 @@ int main(int argc, char *argv[]){
 
         case 'C': 
             arg_C(c->optarg);
+            break;
+        
+        case 'G': 
+            arg_G(c->optarg);
             break;
 
         default:
@@ -291,11 +312,18 @@ int arg_h(char* s){
     printf("-c file1[,file2]..\tlista di file da rimuovere dal server se presenti\n\n");
     printf("-p\tabilita le stampe sullo standard output per ogni operazione\n\n");
     printf("\nLe opzioni '-h' '-p' '-f' non possono essere ripetute, eventuali ripetizioni verranno ignorate\n\n");
+    printf("-o o_flag:file1[,file2]...\t(possono essere assunti come o_flag O_CREATE O_LOCK O_NOFLAGS ed essere messi in or bit a bit usando '-', ad esempio O_CREATE-O_LOCK) apre i file con i flag specificati\n");
+    printf("-O o_flag,N:dirname\t(possono essere assunti come o_flag O_CREATE O_LOCK O_NOFLAGS ed essere messi in or bit a bit usando '-', ad esempio O_CREATE-O_LOCK) apre 'N'(se N == 0, apre tutti i file) file nella directory 'dirname' con i flag specificati\n");
+    printf("-a file:TestoToAppend\tfa un append di 'TestoToAppend' al file specificato\n");
+    printf("-C file1[,file2]...\tchiude i file aperti specificati\n");
+    printf("-G dirname[,n=0]\tchiude 'n' (n può essere non specificato o == 0 in tal caso chiude tutti i file della directory) file della directory specificata\n");
+
     return 0;
 }
 
 
 int arg_f(char* newsock,char* oldsock){
+    memset(oldsock,0,strlen(oldsock));
     strcpy(oldsock,newsock);
     printf("Connesso al socket: %s\n",oldsock);
     return 0;
@@ -320,14 +348,22 @@ int arg_w(char* s,char* dir_rejectedFile){
     int n, flag_end = 0;
     if(nfile != NULL) n = atoi(nfile);
     else n = 0;
-    if(n == 0) flag_end = 1;
+    if(n == 0){
+        flag_end = 1;
+        n++;
+    } 
 
-    esito = writeFileDir(dirpath,dir_rej_path,n,flag_end,&contatore_bytes_scritti,1);
+    if(writeFileDir(dirpath,dir_rej_path,n,flag_end,&contatore_bytes_scritti,1)){
+        esito = 0;
+    }
+    else esito = -1;
     if(flag_stamp_op){
-            time_t t_op = time(NULL);
-            PRINT_OP("Writefile arg_w","writeNfile",&t_op,esito,contatore_bytes_scritti);
-        } 
+        time_t t_op = time(NULL);
+        PRINT_OP("Writefile arg_w","writeNfile",&t_op,esito,contatore_bytes_scritti);
+    } 
 
+    free(dirpath);
+    free(dir_rej_path);
     return esito;
 }
 
@@ -345,6 +381,7 @@ int arg_W(char* s,char* dir_rejectedFile){
 
     while(token != NULL){
         char* buf = malloc(sizeof(char) * NAME_MAX);
+        memset(buf, 0, sizeof(char) * NAME_MAX);
         findFile_getAbsPath(testDirPath,token,&buf);
         if((esito = writeFile(buf,bufdir)) == -1){
             perror("Errore writeFile arg_W");
@@ -379,6 +416,8 @@ int arg_r(char* s,char* dirname){
         size_t size = 0;
         
         char* path = malloc(sizeof(char) * NAME_MAX);
+        memset(path, 0 ,sizeof(char) * NAME_MAX);
+
         findFile_getAbsPath(testDirPath,token,&path);
         if(!strlen(path)) esito = -1;
         else{
@@ -389,8 +428,7 @@ int arg_r(char* s,char* dirname){
             if(!esito){
                 printf("***Contenuto File '%s' ***:\n%s\n\n",token,(char*)buff);  
                 if(dirname != NULL){
-
-                    char *dup = strndup(dirPath,NAME_MAX);
+                    char *dup = strdup(dirPath);
                     strcat(dup,"/");
                     strcat(dup,token);
                     int new_fd;            
@@ -403,7 +441,7 @@ int arg_r(char* s,char* dirname){
                         perror("Errore scrittura file in arg_r");
                         esito = -1;
                     }
-
+                    free(dup);
                     close(new_fd);
                 }
             }
@@ -425,7 +463,7 @@ int arg_r(char* s,char* dirname){
 int arg_R(int n, char* dirname){
     int esito = 0;
     char* bufdir = malloc(sizeof(char) * NAME_MAX);
-    memset(bufdir,0, sizeof(char) * NAME_MAX);
+    memset(bufdir, 0, sizeof(char) * NAME_MAX);
     if(dirname != NULL){
         findDir_getAbsPath(testToSaveDirPath,dirname,&bufdir);
     }
@@ -509,6 +547,40 @@ int arg_o(char* s){
     }
     return esito; 
 }
+int arg_O(char* s){
+    int esito = 0,o_flag,n,flag_end = 0;
+
+    char* flag = strtok(s,",");
+    if(!strcmp(flag,"O_CREATE")) o_flag = O_CREATE;
+    else if(!strcmp(flag,"O_LOCK")) o_flag = O_LOCK;
+    else if(!strcmp(flag,"O_CREATE-O_LOCK")) o_flag = O_CREATE|O_LOCK;
+    else if(!strcmp(flag,"O_NOFLAGS")) o_flag = O_NOFLAGS;
+    char* nfile = strtok(NULL,":");
+    if(nfile != NULL) n = atoi(nfile);
+    else printf("Non sono stati passati i parametri giusti\n");
+    if(n == 0){
+        flag_end = 1;
+        n++;
+    } 
+
+    char* dirname = strtok(NULL,",");
+    char* dirpath = malloc(sizeof(char) * NAME_MAX);
+    memset(dirpath,0,sizeof(char) * NAME_MAX);
+    findDir_getAbsPath(testDirPath,dirname,&dirpath);
+    if(openFileDir(dirpath,o_flag,n,flag_end,1)){
+        esito = 0;
+    }
+    else esito = -1;
+    if(flag_stamp_op){
+        time_t t_op = time(NULL);
+        size_t size = 0;
+        PRINT_OP("openfile arg_O","N File open",&t_op,esito,size);
+    } 
+
+    free(dirpath);
+    return esito;
+}
+
 
 
 int arg_a(char* s,char* dirname){
@@ -561,8 +633,43 @@ int arg_C(char* s){
     return esito; 
 }
 
+int arg_G(char* s){
+    int esito = 0;
+    char* dirname = strtok(s,",");
+    char* dirpath = malloc(sizeof(char) * NAME_MAX);
+    memset(dirpath,0,sizeof(char) * NAME_MAX);
+    char* nfile = strtok(NULL,",");
+    int n, flag_end = 0;
+    if(nfile != NULL) n = atoi(nfile);
+    else n = 0;
+    if(n == 0){
+        flag_end = 1;
+        n++;
+    } 
+
+    findDir_getAbsPath(testDirPath ,dirname,&dirpath);
+
+    if(closeFileDir(dirpath,n,flag_end,1)){
+        esito = 0;
+    }
+    else esito = -1;
+    if(flag_stamp_op){
+        time_t t_op = time(NULL);
+        size_t size = 0;
+        PRINT_OP("closeFile arg_G","closeNfile",&t_op,esito,size);
+    } 
+
+    free(dirpath);
+  
+    return esito;
+}
+
+
+
+
 int writeFileDir(char* dirpath,char* dir_rejectedFile,int n,int flag_end,size_t* written_bytes,int tutto_ok){
     if(n == 0) return tutto_ok;
+    if(tutto_ok != 1) return -1;
 
     if (chdir(dirpath) == -1) {
         printf("Errore cambio directory\n");
@@ -574,13 +681,9 @@ int writeFileDir(char* dirpath,char* dir_rejectedFile,int n,int flag_end,size_t*
         return -1;
     }
     struct dirent *file;
-    while(n>0 && (errno=0, file = readdir(dir)) != NULL) {  
-        struct stat statbuf;
-        if (stat(file->d_name, &statbuf)==-1) {	
-            perror("stat in writeFileDir");
-            return -1;
-        }    
-        if(S_ISDIR(statbuf.st_mode)){
+    while(n > 0 && (errno=0, file = readdir(dir)) != NULL) {  
+
+        if(file->d_type == DT_DIR){
             if(!isdot(file->d_name)){
                 if(writeFileDir(file->d_name,dir_rejectedFile,n,flag_end,written_bytes,tutto_ok) != 0){
                     if (chdir("..") == -1) {
@@ -592,8 +695,14 @@ int writeFileDir(char* dirpath,char* dir_rejectedFile,int n,int flag_end,size_t*
         }
         else{
             char* buf = malloc(sizeof(char) * NAME_MAX);
+            memset(buf,0,sizeof(char) * NAME_MAX);
             findFile_getAbsPath(testDirPath,file->d_name,&buf);
             if(!writeFile(buf,dir_rejectedFile)){
+                struct stat statbuf;
+                if (stat(buf, &statbuf)==-1) {	
+                    perror("stat in writeFileDir");
+                    return -1;
+                } 
                 *written_bytes += statbuf.st_size;
                 if(flag_end) n++;
                 n--;
@@ -601,9 +710,97 @@ int writeFileDir(char* dirpath,char* dir_rejectedFile,int n,int flag_end,size_t*
             else{
                 tutto_ok = 0;
             }
+            free(buf);
         }
     }
     if (errno != 0) perror("readdir in writeFileDir");
+    closedir(dir);
+    return 1;
+}
+
+
+int openFileDir(char* dirpath,int o_flag,int n,int flag_end,int tutto_ok){
+    if(n == 0) return tutto_ok;
+    if(tutto_ok != 1) return -1;
+    if (chdir(dirpath) == -1) {
+        printf("Errore cambio directory\n");
+        return 0;
+    }
+    DIR * dir;
+    if((dir = opendir(".")) == NULL){
+        perror("Aprendo cwd in openFileDir");
+        return -1;
+    }
+    struct dirent *file;
+    while(n > 0 && (errno=0, file = readdir(dir)) != NULL) {  
+        if(file->d_type == DT_DIR){
+            if(!isdot(file->d_name)){
+                if(openFileDir(file->d_name,o_flag,n,flag_end,tutto_ok) != 0){
+                    if (chdir("..") == -1) {
+                        printf("Impossibile risalire alla directory padre.\n");
+                        return -1;
+                    }
+                }
+            }
+        }
+        else{
+            char* buf = malloc(sizeof(char) * NAME_MAX);
+            memset(buf,0,sizeof(char) * NAME_MAX);
+            findFile_getAbsPath(testDirPath,file->d_name,&buf);
+            if(!openFile(buf,o_flag)){
+                if(flag_end) n++;
+                n--;
+            }
+            else{
+                tutto_ok = 0;
+            }
+            free(buf);
+        }
+    }
+    if (errno != 0) perror("readdir in openFileDir");
+    closedir(dir);
+    return 1;
+}
+
+int closeFileDir(char* dirpath,int n,int flag_end,int tutto_ok){
+    if(n == 0) return tutto_ok;
+    if(tutto_ok != 1) return -1;
+    if (chdir(dirpath) == -1) {
+        printf("Errore cambio directory\n");
+        return 0;
+    }
+    DIR * dir;
+    if((dir = opendir(".")) == NULL){
+        perror("Aprendo cwd in openFileDir");
+        return -1;
+    }
+    struct dirent *file;
+    while(n > 0 && (errno=0, file = readdir(dir)) != NULL) {  
+        if(file->d_type == DT_DIR){
+            if(!isdot(file->d_name)){
+                if(closeFileDir(file->d_name,n,flag_end,tutto_ok) != 0){
+                    if (chdir("..") == -1) {
+                        printf("Impossibile risalire alla directory padre.\n");
+                        return -1;
+                    }
+                }
+            }
+        }
+        else{
+            char* buf = malloc(sizeof(char) * NAME_MAX);
+            memset(buf,0,sizeof(char) * NAME_MAX);
+            findFile_getAbsPath(testDirPath,file->d_name,&buf);
+            if(!closeFile(buf)){
+                if(flag_end) n++;
+                n--;
+            }
+            else{
+                tutto_ok = 0;
+            }
+            free(buf);
+        }
+    }
+    if (errno != 0) perror("readdir in openFileDir");
     closedir(dir);
     return 1;
 }

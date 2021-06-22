@@ -72,8 +72,8 @@ void init_Stats();
 
 int main(int argc, char *argv[]){
 
-    //printf("Scegliere un file .txt di configurazione: \n");
-    //showDirConfig();
+    printf("Scegliere un file .txt di configurazione: \n");
+    showDirConfig();
     char c[PATHCONFIG] = {"config2"};
     //scanf("%s",c);
     setConfigFile(c);
@@ -98,17 +98,7 @@ int main(int argc, char *argv[]){
         cleanup();
         exit(EXIT_FAILURE); 
     }
-/*
-    struct sigaction s;
-    memset(&s, 0, sizeof(s));
-    s.sa_handler = SIG_IGN;
-    if ( (sigaction(SIGPIPE,&s,NULL) ) == -1 ) {   
-	    perror("sigaction");
-	    cleanup();
-        exit(EXIT_FAILURE); 
-    } 
-    
-*/
+
     if ((pipe(signal_pipe))==-1) {
 	    perror("signalpipe");
         cleanup();
@@ -306,7 +296,7 @@ void* manager_thread_function(void* args){
                     printf("Ricevuta connessione! Client_fd: %d\n",client_fd);
                     pthread_mutex_lock(&mutex_connections);
                     FD_SET(client_fd,&set);
-                    push_q(&client_fd);
+                    push_q(client_fd);
                     pthread_mutex_unlock(&mutex_connections);
                     if(client_fd > fdmax) fdmax = client_fd;
                 } 
@@ -369,7 +359,7 @@ void* manager_thread_function(void* args){
                                 pthread_mutex_lock(&mutex_connections);
                                 FD_CLR(i,&set);
                                 if(i == fdmax) fdmax = update_fdmax(set,fdmax);
-                                removeConnection_q(&i);
+                                removeConnection_q(i);
                                 pthread_mutex_unlock(&mutex_connections);
                             }
                             else{
@@ -703,7 +693,7 @@ int task_read_file(request* r, response* feedback){
             return 0;
         }
 
-        char buffer[f->dim_bytes-1];
+        char buffer[f->dim_bytes];
         memset(buffer,0,f->dim_bytes);
         memcpy(buffer,f->content,f->dim_bytes);
 
@@ -736,7 +726,7 @@ int task_read_N_file(request* r, response* feedback){
 			while(temp.head != NULL && n_to_read > 0){
                 if(temp.head->open_flag && !temp.head->locked_flag){
 
-                    char namefile[NAME_MAX-1];
+                    char namefile[NAME_MAX];
                     strncpy(namefile,temp.head->abs_path,NAME_MAX);
                     if( writen( r->socket_fd, namefile, NAME_MAX) == -1 ){
                         perror("Errore mentre spedisco il nome del file in readNFiles");
@@ -751,13 +741,13 @@ int task_read_N_file(request* r, response* feedback){
                         return 0;
                     }
 
-                    char buff[dim_toSend - 1]; 
+                    char buff[dim_toSend]; 
                     memset(buff, 0, dim_toSend);
 
                     if(temp.head->content == NULL)  memcpy(buff,"*NO DATA IN FILE*",18);
                     else  memcpy(buff ,temp.head->content, dim_toSend +1);
                     
-                    if( writen( r->socket_fd, buff, dim_toSend +1 ) == -1 ){
+                    if( writen( r->socket_fd, buff, dim_toSend) == -1 ){
                         perror("Errore writen send content ");
                         return 0;
                     }
@@ -855,7 +845,7 @@ int task_append_file(request* r, response* feedback){
                 return 0;
             }
 
-            char content[r->request_size-1];
+            char content[r->request_size];
             memset(content,0,r->request_size);
 
             if(readn(r->socket_fd,&content,r->request_size) == -1){

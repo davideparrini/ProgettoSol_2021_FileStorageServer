@@ -22,7 +22,7 @@ void push_char(char opt, char* optarg){
     tail->next = (char_t*) malloc(sizeof(char_t));
     memset(tail->next,0,sizeof(char_t));
     tail->next->optarg = malloc(sizeof(char)*(strlen(optarg)+1));
-    memset(tail->next->optarg,0,sizeof(tail->next->optarg));
+    memset(tail->next->optarg,0,sizeof(char)*(strlen(optarg)+1));
     
     tail->next->opt = opt;
     strcpy(tail->next->optarg,optarg);
