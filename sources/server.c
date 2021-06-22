@@ -72,9 +72,15 @@ void init_Stats();
 
 int main(int argc, char *argv[]){
 
-    printf("Scegliere un file .txt di configurazione: \n");
-    showDirConfig();
-    char c[PATHCONFIG] = {"config2"};
+    if(argc < 2){
+        printf("Pochi argomenti!\n./server 'configName'\n");
+        exit(EXIT_FAILURE);
+    }
+    //printf("Scegliere un file .txt di configurazione: \n");
+    //showDirConfig();
+    char c[PATHCONFIG];
+    memset(c,0,PATHCONFIG);
+    strcpy(c,argv[1]);
     //scanf("%s",c);
     setConfigFile(c);
     setUpServer(&configurazione);
@@ -155,6 +161,7 @@ int main(int argc, char *argv[]){
     //printf("Dare un nome al filelog.txt :\n");
     //scanf("%s",c);
     //setLogFile(c);
+    print_storageServer(storage);
     create_FileLog();
     free_hash(&storage);
     cleanup();
@@ -1004,7 +1011,7 @@ void create_FileLog(){
 
     fprintf(f,"\n");
     fprintf(f,"Lista file vittima dell'algoritmo di rimpiazzamento:\n");
-    
+
     while(!isEmpty(files_rejected)){
         fprintf(f,"*rejected* %s\n",files_rejected.head->abs_path);
         file_t* temp = files_rejected.head;

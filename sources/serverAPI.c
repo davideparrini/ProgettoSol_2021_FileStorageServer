@@ -253,7 +253,6 @@ int readNFiles(int N, const char* dirname){
     memset(&feedback, 0, sizeof(response));
 
     if(strlen(dirname) != 0) {
-        printf("Entro\n\n\n\n");
         flag_dirname = 1;
     }
     r.type = READ_N_FILE; 

@@ -72,7 +72,7 @@ int main(int argc, char *argv[]){
     int termina = 0;
     int f = 0, h = 0,p = 0;
 
-    while((opt = getopt(argc, argv,"hf:w:W:D:r:R::d:t::l:u:c:po:O:a:C:")) != -1 && !termina){
+    while((opt = getopt(argc, argv,"hf:w:W:D:r:R::d:t:l:u:c:po:O:a:C:G:")) != -1 && !termina){
 
         switch (opt){
         case 'h': 
@@ -128,8 +128,7 @@ int main(int argc, char *argv[]){
             break;
 
         case 't': 
-            if(optarg == NULL) arg_t(0);
-            else arg_t(atoi(optarg)); 
+            arg_t(atoi(optarg)); 
             break;
 
         case 'l': 

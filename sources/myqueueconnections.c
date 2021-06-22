@@ -42,7 +42,7 @@ void removeConnection_q(int client_socket){
 }
 int pop_q(){
     if(head == NULL){
-        return NULL; 
+        return -1; 
     }
     else{
         int res = head->client_socket;
