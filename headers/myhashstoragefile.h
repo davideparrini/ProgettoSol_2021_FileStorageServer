@@ -54,7 +54,7 @@ typedef struct _hash{
 	int stat_n_replacing_algoritm;
 	
 	list *cell;
-	list *cache;
+	list cache;
 }hashtable;
 
 

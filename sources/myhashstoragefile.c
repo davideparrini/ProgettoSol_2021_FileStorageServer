@@ -10,7 +10,7 @@ file_t* init_file(char *namefile){
 	memset(new,0,sizeof(file_t));
 	new->fd = -2;
 	new->abs_path= malloc(sizeof(char)*NAME_MAX);
-	memset(new->abs_path,0,sizeof(new->abs_path));
+	memset(new->abs_path,0,sizeof(char)*NAME_MAX);
 	strncpy(new->abs_path,namefile,NAME_MAX);
 	new->content = NULL;
 	new->dim_bytes = 0;
@@ -50,18 +50,19 @@ int writeContentFile(file_t* f){
 
 void appendContent(file_t * f,void *buff,size_t size){
 	if(f->content == NULL){
-		f->content = malloc(size+1);
-		memset(f->content,0,size+1);
-		memcpy(f->content,buff,size+1);
+		f->content = malloc(size);
+		memset(f->content,0,size);
+		memcpy(f->content,buff,size);
 		f->dim_bytes = size;
 	}
 	else{
-		char content[f->dim_bytes + size];
-		memcpy(content,f->content,f->dim_bytes);
-		strncat(content,(char*)buff,size);
-		f->content = realloc(f->content,f->dim_bytes+size+1);
-		memset(f->content,0,f->dim_bytes+size+1);
-		memcpy(f->content,content,f->dim_bytes + size+1);
+		char content[f->dim_bytes + size ];
+		memset(content,0,f->dim_bytes + size );
+		memcpy(content,f->content, f->dim_bytes);
+		strncat(content,(char*)buff, size);
+		f->content = realloc(f->content,f->dim_bytes + size);
+		memset(f->content,0 ,f->dim_bytes + size );
+		memcpy(f->content,content,f->dim_bytes + size);
 		f->dim_bytes += size;
 	}
 
@@ -75,7 +76,7 @@ void init_list(list* l){
 }
 void init_hash(hashtable *table, config s){
 	//inizializzazione hash
-	table->len = s.max_n_file*2+1;
+	table->len = s.max_n_file*2;
 	table->memory_capacity = MbToBytes(s.memory_capacity);
 	table->memory_used = 0;
 	table->memory_used_from_modified_files = 0;
@@ -91,12 +92,10 @@ void init_hash(hashtable *table, config s){
 
 	table->cell = malloc(table->len*sizeof(list));
 	memset(table->cell,0,table->len*sizeof(list));
-	table->cache = malloc(sizeof(file_t)*table->max_size_cache);
-	memset(table->cache,0,sizeof(file_t)*table->max_size_cache);
 	for (size_t i = 0;i < table->len; i++){
 		init_list(&table->cell[i]);
 	}
-	table->cache = &table->cell[table->len];
+	init_list(&table->cache);
 }
 
 int hash(hashtable table,char *namefile){
@@ -204,7 +203,7 @@ void extract_file(list* cell,file_t* file){
 void extract_file_to_server(hashtable *table,file_t* file){
 	
 	if(file->inCache_flag){
-		extract_file(table->cache,file);
+		extract_file(&table->cache,file);
     }
 	else{	
 		int h = hash(*table,file->abs_path);
@@ -231,22 +230,22 @@ void update_file(hashtable *table,file_t* file){
 		file->modified_flag = 1;
 	}
     if(file->inCache_flag){
-		extract_file(table->cache,file);
-		ins_head_list(table->cache,file);
+		extract_file(&table->cache,file);
+		ins_head_list(&table->cache,file);
 	}
 	else{
 		int h;
 		if(isCacheFull(*table)){
-			file_t *f = pop_list(table->cache);
+			file_t *f = pop_list(&table->cache);
 			f->inCache_flag = 0;
-			table->cache->dim_bytes -= f->dim_bytes;
+			table->cache.dim_bytes -= f->dim_bytes;
 			h = hash(*table,f->abs_path);
 			ins_tail_list(&table->cell[h],file);
 		}
 		h = hash(*table,file->abs_path);
 		extract_file(&table->cell[h],file);
-		ins_head_list(table->cache,file);
-		table->cache->dim_bytes += file->dim_bytes;
+		ins_head_list(&table->cache,file);
+		table->cache.dim_bytes += file->dim_bytes;
 		file->inCache_flag = 1;		
 	}
 }
@@ -262,7 +261,7 @@ file_t* research_file(hashtable table,char *namefile){
 		return f;
 	}
 	else{
-		if((f = research_file_list(*table.cache,namefile)) != NULL){
+		if((f = research_file_list(table.cache,namefile)) != NULL){
 			return f;
 		}
 	}
@@ -295,7 +294,7 @@ int modifying_file(hashtable* table,file_t* f,size_t size_inplus,list* list_reje
 			if(table->n_file_modified > table->max_size_cache){
 				//il numero dei file modificati è maggiore della capacità della cache
 				//quindi inizio a cercare nel server
-				int stop = 0, max_files_toVisite = table->n_file - table->cache->size;
+				int stop = 0, max_files_toVisite = table->n_file - table->cache.size;
 				int h = 0;
 				dupFile_t* to_reject;
 				dupFile_list* temp_reject;
@@ -320,14 +319,14 @@ int modifying_file(hashtable* table,file_t* f,size_t size_inplus,list* list_reje
 					h++;
 				}
 				if(!stop && max_files_toVisite == 0){
-					if(table->memory_capacity > table->cache->dim_bytes + somma_bytes){
+					if(table->memory_capacity > table->cache.dim_bytes + somma_bytes){
 						free(to_reject);
 						free_duplist(temp_reject);
 						return 0;
 					}
 					else{ 
 						while(table->memory_capacity > table->memory_used + size_inplus){
-							file_t* to_reject = pop_list(table->cache);
+							file_t* to_reject = pop_list(&table->cache);
 							if(to_reject->open_flag == 1 && to_reject->locked_flag == 0) table->n_files_free--;
 							table->n_file--;
 							table->n_file_modified--;
@@ -344,11 +343,11 @@ int modifying_file(hashtable* table,file_t* f,size_t size_inplus,list* list_reje
 				table->stat_n_replacing_algoritm++;
 			}
 			else{
-				if(table->memory_capacity > table->cache->dim_bytes + size_inplus){
+				if(table->memory_capacity > table->cache.dim_bytes + size_inplus){
 					return 0; 
 				}
 				while(table->memory_capacity > table->memory_used + f->dim_bytes){
-					file_t* to_reject = pop_list(table->cache);
+					file_t* to_reject = pop_list(&table->cache);
 					table->n_file--;
 					table->n_file_modified--;
 					ins_tail_list(list_reject,to_reject);
@@ -390,7 +389,7 @@ int init_file_inServer(hashtable* table,file_t *f,list* list_reject){
 		h++;
 	}
 	if(!find){
-		to_reject = pop_list(table->cache);
+		to_reject = pop_list(&table->cache);
 		if(to_reject->open_flag == 1 && to_reject->locked_flag == 0) table->n_files_free--;
 	}
 	else extract_file(&table->cell[h], to_reject);
@@ -428,7 +427,7 @@ int ins_file_server(hashtable* table, file_t *f,list* list_reject){
 		if(table->n_file_modified > table->max_size_cache){
 			//ricerca file da rimpiazzare
 
-			int stop = 0,h = 0, max_files_toVisite = table->n_file - table->cache->size;
+			int stop = 0,h = 0, max_files_toVisite = table->n_file - table->cache.size;
 			dupFile_t* to_reject;
 			dupFile_list* temp_reject;
 			init_dupFile_list(temp_reject);
@@ -451,13 +450,13 @@ int ins_file_server(hashtable* table, file_t *f,list* list_reject){
 				h++;
 			}
 			if(!stop && max_files_toVisite  == 0 ){
-				if(s.st_size > table->cache->dim_bytes + somma_bytes){
+				if(s.st_size > table->cache.dim_bytes + somma_bytes){
 					free(to_reject);
 					free_duplist(temp_reject);
 					return 0;
 				}
 				while(table->memory_capacity > table->memory_used + s.st_size){
-					file_t* to_reject = pop_list(table->cache);
+					file_t* to_reject = pop_list(&table->cache);
 					table->memory_used -= to_reject->dim_bytes;
 					table->memory_used_from_modified_files -= to_reject->dim_bytes;
 					table->n_file--;
@@ -474,9 +473,9 @@ int ins_file_server(hashtable* table, file_t *f,list* list_reject){
 			free_duplist(temp_reject);
 		}
 		else{
-			if(table->cache->dim_bytes >= s.st_size){
+			if(table->cache.dim_bytes >= s.st_size){
 				while(table->memory_capacity > table->memory_used + s.st_size){
-					file_t* to_reject = pop_list(table->cache);
+					file_t* to_reject = pop_list(&table->cache);
 					if(to_reject->open_flag == 1 && to_reject->locked_flag == 0) table->n_files_free--;
 					table->memory_used -= to_reject->dim_bytes;
 					table->memory_used_from_modified_files -= to_reject->dim_bytes;
@@ -512,7 +511,7 @@ int isEmpty(list cella){
 	else return 1; 
 }
 int isCacheFull(hashtable table){
-	if(table.cache->size == table.max_size_cache) return 1;
+	if(table.cache.size == table.max_size_cache) return 1;
 	else return 0;
 }
 int isContains_list(list cell, file_t* file){
@@ -527,7 +526,7 @@ int isContains_list(list cell, file_t* file){
 }
 int isContains_hash(hashtable table, file_t* file){
 	// la hash contiene il file? Si, return 1. No, return 0;
-	if(isContains_list(*table.cache,file)) return 1;
+	if(isContains_list(table.cache,file)) return 1;
 	size_t h = hash(table,file->abs_path);
 	return isContains_list(table.cell[h],file);
 }
@@ -561,37 +560,43 @@ void free_list(list* l){
 }
 
 void free_hash(hashtable *table){
-	for (int i=0; i <= table->len; i++){
+	for (int i=0; i < table->len; i++){
 		if(table->cell[i].head != NULL){
 			free_list(&table->cell[i]);
 		}
 	}
+	free_list(&table->cache);
 	free(table->cell);
 	//free(table->cache);
 }
 
 void print_storageServer(hashtable table){
 	//stampa hash
-	for (int i=0; i <= table.len; i++){
-		if(i != table.len) printf("%d -> ",i);
-		else printf("Cache -> ");
+	for (int i=0; i < table.len; i++){
+		printf("%d -> ",i);
 		if(table.cell[i].head != NULL){
-			size_t n = table.cell[i].size;
 			list temp = table.cell[i];
-			while(n > 0){
+			while(temp.head != NULL){
 				printf("%s -> ",temp.head->abs_path);	
 				temp.head = temp.head->next;
-				n--;
 			}
 		}
 		printf("NULL\n");
 	}
+	printf("Cache -> ");
+	list temp = table.cache;
+	while(temp.head != NULL){
+		printf("%s -> ",temp.head->abs_path);	
+		temp.head = temp.head->next;
+	}
+	printf("NULL\n");
 }
 
 
 
 dupFile_t* init_dupFile(file_t* f){
 	dupFile_t* new = malloc(sizeof(dupFile_t));
+	memset(new,0,sizeof(dupFile_t));
 	new->riferimento_file = f;
 	new->next = NULL;
 	return new;

@@ -720,43 +720,44 @@ int task_read_N_file(request* r, response* feedback){
     size_t h = 0;
     int contatore_file_letti = 0; 
 
-    while(n_to_read > 0 && h <= storage.len){
-        if(storage.cell[h].head != NULL){
-			list temp = storage.cell[h];
-			while(temp.head != NULL && n_to_read > 0){
-                if(temp.head->open_flag && !temp.head->locked_flag){
+    while(n_to_read > 0){
+        list temp;
+        if(h < storage.len) temp = storage.cell[h];
+        else temp = storage.cache;
 
-                    char namefile[NAME_MAX];
-                    strncpy(namefile,temp.head->abs_path,NAME_MAX);
-                    if( writen( r->socket_fd, namefile, NAME_MAX) == -1 ){
-                        perror("Errore mentre spedisco il nome del file in readNFiles");
-                        return 0;
-                    }
+        while(temp.head != NULL && n_to_read > 0){
+            if(temp.head->open_flag && !temp.head->locked_flag){
 
-                    size_t dim_toSend = 0;
-                    if(temp.head->content != NULL)  dim_toSend = temp.head->dim_bytes;
+                char namefile[NAME_MAX];
+                strncpy(namefile,temp.head->abs_path,NAME_MAX);
+                if( writen( r->socket_fd, namefile, NAME_MAX) == -1 ){
+                    perror("Errore mentre spedisco il nome del file in readNFiles");
+                    return 0;
+                }
 
-                    if( writen(r->socket_fd, &dim_toSend, sizeof(size_t)) == -1){
-                        errno = EAGAIN;
-                        return 0;
-                    }
+                size_t dim_toSend = 0;
+                if(temp.head->content != NULL)  dim_toSend = temp.head->dim_bytes;
 
-                    char buff[dim_toSend]; 
-                    memset(buff, 0, dim_toSend);
+                if( writen(r->socket_fd, &dim_toSend, sizeof(size_t)) == -1){
+                    errno = EAGAIN;
+                    return 0;
+                }
 
-                    if(temp.head->content == NULL)  memcpy(buff,"*NO DATA IN FILE*",18);
-                    else  memcpy(buff ,temp.head->content, dim_toSend +1);
-                    
-                    if( writen( r->socket_fd, buff, dim_toSend) == -1 ){
-                        perror("Errore writen send content ");
-                        return 0;
-                    }
-            
-                    contatore_file_letti++;
-                    n_to_read--;
-                } 	
-				temp.head = temp.head->next;
-			}
+                char buff[dim_toSend]; 
+                memset(buff, 0, dim_toSend);
+
+                if(temp.head->content == NULL)  memcpy(buff,"*NO DATA IN FILE*",18);
+                else  memcpy(buff ,temp.head->content, dim_toSend +1);
+                
+                if( writen( r->socket_fd, buff, dim_toSend) == -1 ){
+                    perror("Errore writen send content ");
+                    return 0;
+                }
+        
+                contatore_file_letti++;
+                n_to_read--;
+            } 	
+            temp.head = temp.head->next;
 		}
         h++;   
     }
@@ -975,7 +976,7 @@ void setLogFile(char * s){
 
 void create_FileLog(){
     
-    FILE *f;
+    FILE *f = NULL;
     if((f= fopen(logFile_path,"w+")) == NULL){
         perror("Errore creazione filelog");
     }
@@ -985,19 +986,25 @@ void create_FileLog(){
     fprintf(f,"Dimensione massima in Kbytes raggiunta dal file storage : %lf\n",bytesToKb(storage.stat_dim_file));
     fprintf(f,"Numero di volte in cui l’algoritmo di rimpiazzamento della cache è stato eseguito per selezionare uno o più file “vittima” : %d\n",storage.stat_n_replacing_algoritm); 
     fprintf(f,"Lista dei file contenuti nello storage al momento della chiusura del server:\n\n");
-	for (int i=0; i <= storage.len; i++){
+	
+    for (int i=0; i < storage.len; i++){
 		if(storage.cell[i].head != NULL){
-			size_t n = storage.cell[i].size;
 			list temp = storage.cell[i];
-			while(n > 0){
+			while(temp.head != NULL){
 				fprintf(f,"- %s\n",temp.head->abs_path);
 				temp.head = temp.head->next;
-				n--;
 			}
 		}
 	}
+    list temp = storage.cache;
+    while (temp.head != NULL){
+        fprintf(f,"- %s\n",temp.head->abs_path);
+		temp.head = temp.head->next;
+    }
+
     fprintf(f,"\n");
     fprintf(f,"Lista file vittima dell'algoritmo di rimpiazzamento:\n");
+    
     while(!isEmpty(files_rejected)){
         fprintf(f,"*rejected* %s\n",files_rejected.head->abs_path);
         file_t* temp = files_rejected.head;

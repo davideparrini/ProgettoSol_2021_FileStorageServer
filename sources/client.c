@@ -3,7 +3,7 @@
 #include <myqueueopt.h>
 
 #define MAX_SOCKET_PATH 256
-#define PATHCWD "/mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer"
+
 char cwdPath[NAME_MAX];
 char testDirPath[NAME_MAX];
 char testToSaveDirPath[NAME_MAX];
@@ -38,11 +38,18 @@ int closeFileDir(char* dirpath,int n,int flag_end,int tutto_ok);
 
 int main(int argc, char *argv[]){
     
+    if(argc < 3){
+        printf("Pochi argomenti!\n");
+        exit(EXIT_FAILURE);
+    }
+
     getcwd(cwdPath,NAME_MAX);
     strcpy(testDirPath,cwdPath);
     strcpy(testToSaveDirPath,cwdPath);
 
-    char test[NAME_MAX] = {"/test"};
+    char test[NAME_MAX];
+    memset(test,0,NAME_MAX);
+    strcpy(test,argv[1]);
     strcat(testDirPath,test);
     char testTosave[NAME_MAX] = {"/test_fileToSave"};
     strcat(testToSaveDirPath,testTosave);
@@ -53,10 +60,7 @@ int main(int argc, char *argv[]){
     
     struct timespec timer_connection = {20,0};
     time_t msec = 100;
-    if(argc < 2){
-        printf("Pochi argomenti!\n");
-        exit(EXIT_FAILURE);
-    }
+    
     /*
     printf("Setup client!\n");
     printf("Digitare secondi di attesa di connessione al server:\n");
@@ -490,6 +494,7 @@ int arg_c(char* s){
     char* token = strtok(s,",");
     while(token != NULL && !esito){
         char* buf = malloc(sizeof(char) * NAME_MAX);
+        memset(buf,0,sizeof(char) * NAME_MAX);
         findFile_getAbsPath(testDirPath,token,&buf);
         if((esito = removeFile(buf)) == -1){
             perror("Errore removeFile");
@@ -528,6 +533,7 @@ int arg_o(char* s){
     char* token = strtok(NULL,",");
     while(token != NULL){
         char* buf = malloc(sizeof(char) * NAME_MAX);
+        memset(buf,0,sizeof(char) * NAME_MAX);
         findFile_getAbsPath(testDirPath,token,&buf);
         if(!strlen(buf)){ 
             strcat(buf,testDirPath);
@@ -588,7 +594,7 @@ int arg_a(char* s,char* dirname){
     char* token = strtok(s,":");
     char* content = strtok(NULL,"");
     char* buffer = malloc(sizeof(char) * NAME_MAX);
-
+    memset(buffer,0,sizeof(char) * NAME_MAX);
     char* bufdir = malloc(sizeof(char) * NAME_MAX);
     memset(bufdir,0,sizeof(char) * NAME_MAX);
 

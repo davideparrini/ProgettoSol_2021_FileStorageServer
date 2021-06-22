@@ -252,8 +252,10 @@ int readNFiles(int N, const char* dirname){
     memset(&r,0,sizeof(request));
     memset(&feedback, 0, sizeof(response));
 
-    if(strlen(dirname) != 0) flag_dirname = 1;
-    
+    if(strlen(dirname) != 0) {
+        printf("Entro\n\n\n\n");
+        flag_dirname = 1;
+    }
     r.type = READ_N_FILE; 
     r.c = N;
 
@@ -319,6 +321,12 @@ int readNFiles(int N, const char* dirname){
         errno = EAGAIN;
         return -1;
     }
+
+    if(n_to_read == 0){
+        errno = ENODATA;
+        return -1;
+    }
+    
     switch (feedback.type){
     case READ_N_FILE_FAILURE:
         errno = EPERM;

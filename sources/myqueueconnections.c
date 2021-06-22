@@ -1,5 +1,6 @@
 #include <myqueueconnections.h>
 #include <stdlib.h>
+#include <string.h>
 //queue for request
 static node_t *head = NULL;
 static node_t *tail = NULL;
@@ -8,6 +9,7 @@ static node_t *tail = NULL;
 void init_q(int client_socket){
 
     node_t* q  = (node_t*) malloc(sizeof(node_t));
+    memset(q,0,sizeof(node_t));
 	q->client_socket = client_socket;
     head = q;
     tail = q;
@@ -15,11 +17,12 @@ void init_q(int client_socket){
 }
 
 void push_q(int client_socket){
-     if(tail == NULL){
+    if(tail == NULL){
         init_q(client_socket); 
         return;
     }  
     tail->next = (node_t*) malloc(sizeof(node_t));
+    memset(tail->next,0,sizeof(node_t));
     tail->next->client_socket = client_socket;
     tail->next->next = NULL;
     tail = tail->next;
@@ -37,12 +40,12 @@ void removeConnection_q(int client_socket){
         cor = cor->next;
     }
 }
-int* pop_q(){
+int pop_q(){
     if(head == NULL){
         return NULL; 
     }
     else{
-        int *res = head->client_socket;
+        int res = head->client_socket;
         node_t *temp = head;
         head = head->next;
         if(head == NULL) tail = NULL;

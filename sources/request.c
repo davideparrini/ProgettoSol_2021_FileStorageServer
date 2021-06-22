@@ -5,6 +5,7 @@ static req_t *tail = NULL;
 void init_r(request *req_client){
 
     req_t* r  = (req_t*) malloc(sizeof(req_t));
+    memset(r,0,sizeof(req_t));
 	r->req = req_client;
     head = r;
     tail = r;
@@ -16,6 +17,7 @@ void push_r(request *r){
         return;
     }  
     tail->next = (req_t*) malloc(sizeof(req_t));
+    memset(tail->next,0,sizeof(req_t));
     tail->next->req = r;
     tail->next->next = NULL;
     tail = tail->next;
