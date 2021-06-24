@@ -11,5 +11,6 @@ void push_q(int client_socket);
 int pop_q();
 void rmv_q();
 int isEmpty_q();
+void print_q();
 void removeConnection_q(int client_socket);
 #endif

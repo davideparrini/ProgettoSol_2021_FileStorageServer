@@ -1,4 +1,5 @@
 #include <myqueueconnections.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 //queue for request
@@ -32,7 +33,8 @@ void removeConnection_q(int client_socket){
     node_t *prec = NULL;
     while(cor != NULL){
         if(cor->client_socket == client_socket){
-            node_t *toFree = cor; 
+            node_t *toFree = cor;
+            
             if(prec == NULL){
                 cor = cor->next;
                 head = cor;
@@ -41,6 +43,7 @@ void removeConnection_q(int client_socket){
                 prec->next = cor->next;
                 cor = cor->next;     
             }
+            if(head == NULL) tail = NULL;
             toFree->next = NULL;
             free(toFree);
             return;
@@ -62,7 +65,14 @@ int pop_q(){
         return res;
     }
 }
-
+void print_q(){
+    node_t *temp = head;
+    while(temp != NULL){
+        printf("Connessione n %d\n",temp->client_socket);
+        temp = temp->next;
+    }
+    printf("Fine printq\n");
+}
 void rmv_q() {
     node_t* q = head;
 	if (q == NULL)

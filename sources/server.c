@@ -445,6 +445,7 @@ void* manager_thread_function(void* args){
                                 FD_CLR(i,&set);
                                 if(i == fdmax) fdmax = update_fdmax(set,fdmax);
                                 removeConnection_q(i);
+
                                 if(isEmpty_q() && flag_SigHup){
                                     flag_closeServer = 1;
                                     pthread_cond_broadcast(&cond_var_request);
@@ -514,22 +515,20 @@ void* worker_thread_function(void* args){
     while (1){
         pthread_mutex_lock(&mutex_request);
 
-        if(flag_closeServer){
-            pthread_mutex_unlock(&mutex_request);
-            break;
-        }
-        request *r;
-        memset(&r,0,sizeof(r));   
-
-        if(isEmpty_r()){
+        if(!flag_closeServer && isEmpty_r()){
             pthread_cond_wait(&cond_var_request,&mutex_request);
         }
         if(flag_closeServer){
             pthread_mutex_unlock(&mutex_request);
-            break;
+            pthread_exit(NULL);
         }
+
+        request *r;
+        memset(&r,0,sizeof(r));   
+
         r = pop_r();
         pthread_mutex_unlock(&mutex_request);
+        
         if(r != NULL){
             response feedback;
             do_task(r,&feedback);
@@ -546,8 +545,7 @@ void* worker_thread_function(void* args){
             }
             pthread_mutex_unlock(&mutex_pipe_WM);
         }
-        else break;
-        
+        else break;  
     }
     return NULL;
 }
