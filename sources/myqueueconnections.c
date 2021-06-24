@@ -32,8 +32,17 @@ void removeConnection_q(int client_socket){
     node_t *prec = NULL;
     while(cor != NULL){
         if(cor->client_socket == client_socket){
-            if(prec != NULL) prec->next = cor->next;
-            free(cor);
+            node_t *toFree = cor; 
+            if(prec == NULL){
+                cor = cor->next;
+                head = cor;
+            }
+            else{
+                prec->next = cor->next;
+                cor = cor->next;     
+            }
+            toFree->next = NULL;
+            free(toFree);
             return;
         }
         prec = cor;

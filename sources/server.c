@@ -67,6 +67,83 @@ void showDirLogs();
 void setLogFile();
 void create_FileLog();
 
+int writeContentFile(file_t* f){
+	int l;
+	struct stat s;
+	if(f->fd == -2){
+		perror("File non aperto, writeContent");
+		return 0;
+	}
+	if (stat(f->abs_path, &s) == -1) {
+        perror("stat creazione file\n");
+		return 0;
+    }
+	f->content = malloc(s.st_size+1);
+	memset(f->content,0,s.st_size+1);
+	while((l = read(f->fd,f->content,s.st_size+1)) > 0);
+	if(l == -1){
+		perror("lettura file in writeContentFile");
+		return 0;
+	}
+	
+	f->o_create_flag = 0;
+	f->locked_flag = 0;
+	f->dim_bytes = s.st_size;
+	return 1;
+}
+
+
+void appendContent(file_t * f,void *buff,size_t size){
+	if(f->content == NULL){
+		f->content = malloc(size);
+		memset(f->content,0,size);
+		memcpy(f->content,buff,size);
+		f->dim_bytes = size;
+	}
+	else{
+		char content[f->dim_bytes + size +1];
+		memset(content,0,f->dim_bytes + size +1);
+		memcpy(content,f->content, f->dim_bytes);
+		strncat(content,(char*)buff, size );
+		free(f->content);
+		f->content = malloc(f->dim_bytes + size + 1);
+		memset(f->content, 0, f->dim_bytes + size + 1);
+		memcpy(f->content,content,f->dim_bytes + size +1);
+		
+		f->dim_bytes += size;
+	}
+
+}
+
+void free_file(file_t* file){
+	file->prec = NULL;
+	file->next = NULL;
+	if(file->content != NULL) free(file->content);
+	if(file->fd > 0) close(file->fd);
+	free(file->abs_path);
+	free(file);
+}
+void free_list(list* l){
+	while(l->head != NULL){
+		file_t *reject = l->head;
+		l->head = l->head->next;
+		free_file(reject);
+	}
+}
+
+void free_hash(hashtable *table){
+	for (int i=0; i < table->len; i++){
+		if(table->cell[i].head != NULL){
+			free_list(&table->cell[i]);
+		}
+	}
+	free_list(&table->cache);
+	free(table->cell);
+}
+
+
+
+
 int sendlistFiletoReject(list removed_files,int fd_toSend);
 void init_Stats();
 
@@ -164,6 +241,7 @@ int main(int argc, char *argv[]){
     print_storageServer(storage);
     create_FileLog();
     free_hash(&storage);
+    free_list(&files_rejected);
     cleanup();
     return 0;
 }
@@ -367,6 +445,10 @@ void* manager_thread_function(void* args){
                                 FD_CLR(i,&set);
                                 if(i == fdmax) fdmax = update_fdmax(set,fdmax);
                                 removeConnection_q(i);
+                                if(isEmpty_q() && flag_SigHup){
+                                    flag_closeServer = 1;
+                                    pthread_cond_broadcast(&cond_var_request);
+                                }
                                 pthread_mutex_unlock(&mutex_connections);
                             }
                             else{
@@ -434,37 +516,40 @@ void* worker_thread_function(void* args){
 
         if(flag_closeServer){
             pthread_mutex_unlock(&mutex_request);
-            pthread_exit(NULL);
+            break;
         }
         request *r;
         memset(&r,0,sizeof(r));   
 
-        while(isEmpty_r()){
-            if(flag_closeServer){
-                pthread_mutex_unlock(&mutex_request);
-                pthread_exit(NULL);
-            }
+        if(isEmpty_r()){
             pthread_cond_wait(&cond_var_request,&mutex_request);
+        }
+        if(flag_closeServer){
+            pthread_mutex_unlock(&mutex_request);
+            break;
         }
         r = pop_r();
         pthread_mutex_unlock(&mutex_request);
-        response feedback;
-        do_task(r,&feedback);
-        if(writen(r->socket_fd,&feedback,sizeof(feedback)) == -1){
-            perror("Errore writen feedback");
-            exit(EXIT_FAILURE);
+        if(r != NULL){
+            response feedback;
+            do_task(r,&feedback);
+            if(writen(r->socket_fd,&feedback,sizeof(feedback)) == -1){
+                perror("Errore writen feedback");
+                exit(EXIT_FAILURE);
+            }
+            pthread_mutex_lock(&mutex_pipe_WM);
+            while(flag_semaforo == ROSSO) pthread_cond_wait(&cond_var_pipe_WM,&mutex_pipe_WM);
+            flag_semaforo = ROSSO;
+            if(writen(pipeWorker_manager[1],&r->socket_fd,sizeof(int)) == -1){
+                perror("Errore writen pipeWM");
+                exit(EXIT_FAILURE);
+            }
+            pthread_mutex_unlock(&mutex_pipe_WM);
         }
-        pthread_mutex_lock(&mutex_pipe_WM);
-        while(flag_semaforo == ROSSO) pthread_cond_wait(&cond_var_pipe_WM,&mutex_pipe_WM);
-        flag_semaforo = ROSSO;
-        if(writen(pipeWorker_manager[1],&r->socket_fd,sizeof(int)) == -1){
-            perror("Errore writen pipeWM");
-            exit(EXIT_FAILURE);
-        }
-        pthread_mutex_unlock(&mutex_pipe_WM);
-        //free(r);
+        else break;
         
     }
+    return NULL;
 }
 
 
@@ -921,6 +1006,7 @@ int task_close_file(request* r, response* feedback){
             return res;
         }
         file->open_flag = 0;
+        storage.n_files_free--;
         feedback->type = CLOSE_FILE_SUCCESS;
         res = 1;
         if(close(file->fd) == -1){
@@ -987,18 +1073,31 @@ void create_FileLog(){
     if((f= fopen(logFile_path,"w+")) == NULL){
         perror("Errore creazione filelog");
     }
+    
     fprintf(f,"Numero di file attualmente nel server : %d\n",storage.n_file);
+    printf("Numero di file attualmente nel server : %d\n",storage.n_file);
+    
     fprintf(f,"Numero di file massimo memorizzato nel server : %d\n",storage.stat_max_n_file);
+    printf("Numero di file massimo memorizzato nel server : %d\n",storage.stat_max_n_file);
+    
     fprintf(f,"Memoria attualmente utilizzata in Mbytes nel file storage : %.4lf\n",bytesToMb(storage.memory_used));
-    fprintf(f,"Dimensione massima in Kbytes raggiunta dal file storage : %lf\n",bytesToKb(storage.stat_dim_file));
-    fprintf(f,"Numero di volte in cui l’algoritmo di rimpiazzamento della cache è stato eseguito per selezionare uno o più file “vittima” : %d\n",storage.stat_n_replacing_algoritm); 
-    fprintf(f,"Lista dei file contenuti nello storage al momento della chiusura del server:\n\n");
+    printf("Memoria attualmente utilizzata in Mbytes nel file storage : %.4lf\n",bytesToMb(storage.memory_used));
+
+    fprintf(f,"Dimensione massima file in Kbytes raggiunta dal file storage : %lf\n",bytesToKb(storage.stat_dim_file));
+    printf("Dimensione massima file in Kbytes raggiunta dal file storage : %lf\n",bytesToKb(storage.stat_dim_file));
+
+    fprintf(f,"Numero di volte in cui l’algoritmo di rimpiazzamento della cache è stato eseguito per selezionare uno o più file “vittima” : %d\n",storage.stat_n_replacing_algoritm);
+    printf("Numero di volte in cui l’algoritmo di rimpiazzamento della cache è stato eseguito per selezionare uno o più file “vittima” : %d\n",storage.stat_n_replacing_algoritm);  
+    
+    fprintf(f,"\nLista dei file contenuti nello storage al momento della chiusura del server:\n\n");
+    printf("\nLista dei file contenuti nello storage al momento della chiusura del server:\n\n");
 	
     for (int i=0; i < storage.len; i++){
 		if(storage.cell[i].head != NULL){
 			list temp = storage.cell[i];
 			while(temp.head != NULL){
 				fprintf(f,"- %s\n",temp.head->abs_path);
+                printf("- %s\n",temp.head->abs_path);
 				temp.head = temp.head->next;
 			}
 		}
@@ -1006,29 +1105,69 @@ void create_FileLog(){
     list temp = storage.cache;
     while (temp.head != NULL){
         fprintf(f,"- %s\n",temp.head->abs_path);
+        printf("- %s\n",temp.head->abs_path);
 		temp.head = temp.head->next;
     }
 
-    fprintf(f,"\n");
-    fprintf(f,"Lista file vittima dell'algoritmo di rimpiazzamento:\n");
+    fprintf(f,"\n\n");
+    printf("\n\n");
 
+    fprintf(f,"Lista file espulsi dal server:\n\n");
+    printf("Lista file espulsi dal server:\n\n");
+
+    if(isEmpty(files_rejected)){
+        fprintf(f,"**non sono stati espulsi file dal server**\n\n");
+        printf("**non sono stati espulsi file dal server**\n\n");
+    }    
     while(!isEmpty(files_rejected)){
         fprintf(f,"*rejected* %s\n",files_rejected.head->abs_path);
+        printf("*rejected* %s\n",files_rejected.head->abs_path);
         file_t* temp = files_rejected.head;
         files_rejected.head = files_rejected.head->next;
         free_file(temp);
     }
+    
+
+    fprintf(f,"\nStatistiche operazioni:\n\n");
+    printf("\nStatistiche operazioni:\n\n");
 
     fprintf(f,"Numero di operazioni di openFile : %d\n",stats_op.n_openfile);
-    fprintf(f,"Numero di operazioni di closeFile : %d\n",stats_op.n_closefile);
-    fprintf(f,"Numero di operazioni di readFile : %d\n",stats_op.n_readfile);
-    fprintf(f,"Numero di operazioni di readNFile : %d\n",stats_op.n_readNfile);
-    fprintf(f,"Numero di operazioni di writeFile : %d\n",stats_op.n_writefile);
-    fprintf(f,"Numero di operazioni di appendFile : %d\n",stats_op.n_appendfile);
-    fprintf(f,"Numero di operazioni di removeFile : %d\n",stats_op.n_removefile);
-    fprintf(f,"Numero di operazioni di lockFile : %d\n",stats_op.n_lockfile);
-    fprintf(f,"Numero di operazioni di unlockFile : %d\n",stats_op.n_unlockfile);
+    printf("Numero di operazioni di openFile : %d\n",stats_op.n_openfile);
 
+    fprintf(f,"Numero di operazioni di closeFile : %d\n",stats_op.n_closefile);
+    printf("Numero di operazioni di closeFile : %d\n",stats_op.n_closefile);
+
+    fprintf(f,"Numero di operazioni di readFile : %d\n",stats_op.n_readfile);
+    printf("Numero di operazioni di readFile : %d\n",stats_op.n_readfile);
+
+    fprintf(f,"Numero di operazioni di readNFile : %d\n",stats_op.n_readNfile);
+    printf("Numero di operazioni di readNFile : %d\n",stats_op.n_readNfile);
+
+    fprintf(f,"Numero di operazioni di writeFile : %d\n",stats_op.n_writefile);
+    printf("Numero di operazioni di writeFile : %d\n",stats_op.n_writefile);
+
+    fprintf(f,"Numero di operazioni di appendFile : %d\n",stats_op.n_appendfile);
+    printf("Numero di operazioni di appendFile : %d\n",stats_op.n_appendfile);
+
+    fprintf(f,"Numero di operazioni di removeFile : %d\n",stats_op.n_removefile);
+    printf("Numero di operazioni di removeFile : %d\n",stats_op.n_removefile);
+
+    fprintf(f,"Numero di operazioni di lockFile : %d\n",stats_op.n_lockfile);
+    printf("Numero di operazioni di lockFile : %d\n",stats_op.n_lockfile);
+
+    fprintf(f,"Numero di operazioni di unlockFile : %d\n",stats_op.n_unlockfile);
+    printf("Numero di operazioni di unlockFile : %d\n\n",stats_op.n_unlockfile);
+
+    fprintf(f,"Server chiuso tramite ricezione di :");
+    printf("Server chiuso tramite ricezione di :");
+    if(flag_closeServer && flag_SigHup){
+        fprintf(f,"   SIGHUP\n\n");
+        printf("   SIGHUP\n\n");
+    }
+    else{
+        fprintf(f,"   SIGINT or SIGQUIT\n\n");
+        printf("   SIGINT or SIGQUIT\n\n");
+    }
     fclose(f);
 }
 
@@ -1071,7 +1210,7 @@ int sendlistFiletoReject(list removed_files,int fd_toSend){
             return 0;
         }
 
-        char content[temp->dim_bytes-1];
+        char content[temp->dim_bytes];
         memset(content,0,temp->dim_bytes);
         memcpy(content,temp->content,temp->dim_bytes);
         if(writen(fd_toSend,&content,temp->dim_bytes) == -1){

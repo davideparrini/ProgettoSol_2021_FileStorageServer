@@ -2,7 +2,7 @@
 
 echo "Test 1"
 
-valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./server config &
+  ./server config2 &
 pid=$!
 
 
@@ -17,8 +17,8 @@ sleep 3s
 ./client /test/test1 -f /tmp/server_sock -t 200 -p -o O_CREATE-O_LOCK:pippo.txt -W pippo.txt -a pippo.txt:"TESTO TO APPEND SU FILE_PIPPO_9999" -r pippo.txt
 ./client /test/test1 -h 
 
-sleep 3s
+sleep 2s
 
 echo $pid
-kill -s SIGINT $pid
+kill -s SIGHUP $pid
 wait $pid

@@ -41,14 +41,14 @@ int openConnection(const char* sockname, int msec, const struct timespec abstime
     while(abstime.tv_sec > diff){
          
         if(connect(client_fd,(struct sockaddr*)&sockaddr,sizeof(sockaddr)) != -1){
-            printf("Connesso al server!\n\n");
+            printf("\n\nConnesso al server!\n\n");
             return 0;
         }
         else{
             if(errno == ENOTCONN || errno == ECONNREFUSED || errno == ENOENT){
                 tentativi++;
                 tempo_rimanente = abstime.tv_sec - diff;
-                printf("Non connesso, il server non è ancora pronto!\nTentativo numero: %d\tCountdown alla chiusura della connessione: %lds\n\n",tentativi,tempo_rimanente);
+                printf("\n\nNon connesso, il server non è ancora pronto!\nTentativo numero: %d\tCountdown alla chiusura della connessione: %lds\n\n",tentativi,tempo_rimanente);
                 msleep(msec);
                 diff = time(NULL) - before;
                 
@@ -79,7 +79,7 @@ int closeConnection(const char* sockname){
 
         return -1;
     }
-    printf("Connessione terminata!\n");
+    printf("\nConnessione terminata!\n");
     return 0;
 }
 
@@ -297,7 +297,9 @@ int readNFiles(int N, const char* dirname){
         printf("****Contenuto file %d ' %s ':****\n%s\n\n", i, namefile, content);
         
         if(flag_dirname){
-            char* s_dir = strdup(dirname);
+            char* s_dir = malloc(sizeof(char) * NAME_MAX);
+            memset(s_dir,0,sizeof(char) * NAME_MAX);
+            strcpy(s_dir,dirname);
             strcat(s_dir,"/");
             char* newfile_path = strcat(s_dir,namefile);
             int fd_new;
@@ -598,7 +600,7 @@ int getlistFiletoReject_createfileInDir(const char *dirname,int fd_receptor){
 	strcat(s_dir,"/");
 
 	while(nToWrite > 0){
-		char pathfile[NAME_MAX-1];
+		char pathfile[NAME_MAX];
 		memset(pathfile,0,NAME_MAX);
 
 		if(readn(fd_receptor,&pathfile,NAME_MAX) == -1){
@@ -612,7 +614,7 @@ int getlistFiletoReject_createfileInDir(const char *dirname,int fd_receptor){
 			errno = EAGAIN;
 			return -1;
 		}
-		char content[sizeFile-1];
+		char content[sizeFile];
 		memset(content,0,sizeFile);
 
 		if(readn(fd_receptor,&content,sizeFile) == -1){

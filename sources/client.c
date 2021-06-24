@@ -314,12 +314,12 @@ int arg_h(char* s){
     printf("-u file1[,file2]..\tlista di nomi di file su cui rilasciare la mutua esclusione\n\n");
     printf("-c file1[,file2]..\tlista di file da rimuovere dal server se presenti\n\n");
     printf("-p\tabilita le stampe sullo standard output per ogni operazione\n\n");
-    printf("\nLe opzioni '-h' '-p' '-f' non possono essere ripetute, eventuali ripetizioni verranno ignorate\n\n");
-    printf("-o o_flag:file1[,file2]...\t(possono essere assunti come o_flag O_CREATE O_LOCK O_NOFLAGS ed essere messi in or bit a bit usando '-', ad esempio O_CREATE-O_LOCK) apre i file con i flag specificati\n");
-    printf("-O o_flag,N:dirname\t(possono essere assunti come o_flag O_CREATE O_LOCK O_NOFLAGS ed essere messi in or bit a bit usando '-', ad esempio O_CREATE-O_LOCK) apre 'N'(se N == 0, apre tutti i file) file nella directory 'dirname' con i flag specificati\n");
-    printf("-a file:TestoToAppend\tfa un append di 'TestoToAppend' al file specificato\n");
-    printf("-C file1[,file2]...\tchiude i file aperti specificati\n");
-    printf("-G dirname[,n=0]\tchiude 'n' (n può essere non specificato o == 0 in tal caso chiude tutti i file della directory) file della directory specificata\n");
+    printf("\nLe opzioni '-h' '-p' '-f' non possono essere ripetute, eventuali ripetizioni verranno ignorate\n\n\n");
+    printf("-o o_flag:file1[,file2]...\t(possono essere assunti come o_flag O_CREATE O_LOCK O_NOFLAGS ed essere messi in or bit a bit usando '-', ad esempio O_CREATE-O_LOCK) apre i file con i flag specificati\n\n");
+    printf("-O o_flag,N:dirname\t(possono essere assunti come o_flag O_CREATE O_LOCK O_NOFLAGS ed essere messi in or bit a bit usando '-', ad esempio O_CREATE-O_LOCK) apre 'N'(se N == 0, apre tutti i file) file nella directory 'dirname' con i flag specificati\n\n");
+    printf("-a file:TestoToAppend\tfa un append di 'TestoToAppend' al file specificato\n\n");
+    printf("-C file1[,file2]...\tchiude i file aperti specificati\n\n");
+    printf("-G dirname[,n=0]\tchiude 'n' (n può essere non specificato o == 0 in tal caso chiude tutti i file della directory) file della directory specificata\n\n");
 
     return 0;
 }
@@ -401,7 +401,6 @@ int arg_W(char* s,char* dir_rejectedFile){
         PRINT_OP("WriteFile arg_W",s,&t_op,esito,size);
     }
     free(bufdir);
-    free(token);
     return esito;
 }
 
@@ -456,7 +455,6 @@ int arg_r(char* s,char* dirname){
         token = strtok(NULL,",");
     }
     free(dirPath); 
-    free(token);
     if(flag_stamp_op){
         time_t t_op = time(NULL);
         PRINT_OP("readFile",s,&t_op,esito,read_bytes);
@@ -592,8 +590,10 @@ int arg_a(char* s,char* dirname){
     int esito = 0;
     char* token = strtok(s,":");
     char* content = strtok(NULL,"");
+
     char* buffer = malloc(sizeof(char) * NAME_MAX);
     memset(buffer,0,sizeof(char) * NAME_MAX);
+
     char* bufdir = malloc(sizeof(char) * NAME_MAX);
     memset(bufdir,0,sizeof(char) * NAME_MAX);
 
@@ -602,6 +602,7 @@ int arg_a(char* s,char* dirname){
     }
 
     findFile_getAbsPath(testDirPath,token,&buffer);
+
     if(!strlen(buffer)) esito = -1;
     else{
         if(appendToFile(buffer,(void*)content,strlen(content),bufdir) == -1){
@@ -615,6 +616,7 @@ int arg_a(char* s,char* dirname){
         PRINT_OP("appendToFile",token,&t_op,esito,sizeof(content));
     } 
     free(buffer);
+    free(bufdir);
     return esito; 
 }
 

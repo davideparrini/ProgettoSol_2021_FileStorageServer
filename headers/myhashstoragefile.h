@@ -61,8 +61,8 @@ typedef struct _hash{
 
 //inizializzazioni server
 file_t* init_file(char *namefile);
-int writeContentFile(file_t* f);
-void appendContent(file_t * f,void *buff,size_t size);
+//int writeContentFile(file_t* f);
+//void appendContent(file_t * f,void *buff,size_t size);
 void init_list(list* l);
 void init_hash(hashtable *table, config s);
 
@@ -95,10 +95,13 @@ file_t* research_file(hashtable table,char* namefile);
 int isContains_hash(hashtable table, file_t* file);
 int isEmpty(list cella);
 int isCacheFull(hashtable table);
+
+//frees
+/*
 void free_file(file_t* file);
 void free_list(list* l);
 void free_hash(hashtable* table);
-
+*/
 void print_storageServer(hashtable table);
 list* concatList(list *l,list *l2);
 

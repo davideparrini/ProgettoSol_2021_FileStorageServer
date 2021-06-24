@@ -8,10 +8,13 @@ file_t* init_file(char *namefile){
 	}
 	file_t* new = malloc(sizeof(file_t));
 	memset(new,0,sizeof(file_t));
+
 	new->fd = -2;
+
 	new->abs_path= malloc(sizeof(char)*NAME_MAX);
 	memset(new->abs_path,0,sizeof(char)*NAME_MAX);
 	strncpy(new->abs_path,namefile,NAME_MAX);
+
 	new->content = NULL;
 	new->dim_bytes = 0;
 	new->modified_flag = 0;
@@ -23,50 +26,9 @@ file_t* init_file(char *namefile){
 	new->prec = NULL;
 	return new;	
 }
-int writeContentFile(file_t* f){
-	int l;
-	struct stat s;
-	if(f->fd == -2){
-		perror("File non aperto, writeContent");
-		return 0;
-	}
-	if (stat(f->abs_path, &s) == -1) {
-        perror("stat creazione file\n");
-		return 0;
-    }
-	f->content = malloc(s.st_size+1);
-	memset(f->content,0,s.st_size+1);
-	while((l = read(f->fd,f->content,s.st_size+1)) > 0);
-	if(l == -1){
-		perror("lettura file in writeContentFile");
-		return 0;
-	}
-	
-	f->o_create_flag = 0;
-	f->locked_flag = 0;
-	f->dim_bytes = s.st_size;
-	return 1;
-}
 
-void appendContent(file_t * f,void *buff,size_t size){
-	if(f->content == NULL){
-		f->content = malloc(size);
-		memset(f->content,0,size);
-		memcpy(f->content,buff,size);
-		f->dim_bytes = size;
-	}
-	else{
-		char content[f->dim_bytes + size ];
-		memset(content,0,f->dim_bytes + size );
-		memcpy(content,f->content, f->dim_bytes);
-		strncat(content,(char*)buff, size);
-		f->content = realloc(f->content,f->dim_bytes + size);
-		memset(f->content,0 ,f->dim_bytes + size );
-		memcpy(f->content,content,f->dim_bytes + size);
-		f->dim_bytes += size;
-	}
 
-}
+
 
 void init_list(list* l){
 	l->head = NULL;
@@ -340,7 +302,6 @@ int modifying_file(hashtable* table,file_t* f,size_t size_inplus,list* list_reje
 				ins_dupList_to_list(table,list_reject,temp_reject);
 				free(to_reject);
 				free_duplist(temp_reject);
-				table->stat_n_replacing_algoritm++;
 			}
 			else{
 				if(table->memory_capacity > table->cache.dim_bytes + size_inplus){
@@ -353,8 +314,8 @@ int modifying_file(hashtable* table,file_t* f,size_t size_inplus,list* list_reje
 					ins_tail_list(list_reject,to_reject);
 					free(to_reject);
 				}
-				table->stat_n_replacing_algoritm++; 
 			}
+			table->stat_n_replacing_algoritm++;
 		}
 	}
 	table->memory_used += size_inplus;
@@ -544,33 +505,10 @@ list* concatList(list *l,list *l2){
 	else return NULL;
 }
 
-void free_file(file_t* file){
-	if(file->content != NULL) free(file->content);
-	if(file->fd > 0) close(file->fd);
-	free(file->abs_path);
-	free(file);
-}
-void free_list(list* l){
-	while(l->head != NULL){
-		file_t *reject = l->head;
-		l->head = l->head->next;
-		free_file(reject);
-	}
-	//free(l);
-}
-
-void free_hash(hashtable *table){
-	for (int i=0; i < table->len; i++){
-		if(table->cell[i].head != NULL){
-			free_list(&table->cell[i]);
-		}
-	}
-	//free_list(&table->cache);
-	free(table->cell);
-}
 
 void print_storageServer(hashtable table){
 	//stampa hash
+	printf("\n\n");
 	for (int i=0; i < table.len; i++){
 		printf("%d -> ",i);
 		if(table.cell[i].head != NULL){
@@ -588,7 +526,7 @@ void print_storageServer(hashtable table){
 		printf("%s -> ",temp.head->abs_path);	
 		temp.head = temp.head->next;
 	}
-	printf("NULL\n");
+	printf("NULL\n\n\n");
 }
 
 
