@@ -67,82 +67,6 @@ void showDirLogs();
 void setLogFile();
 void create_FileLog();
 
-int writeContentFile(file_t* f){
-	int l;
-	struct stat s;
-	if(f->fd == -2){
-		perror("File non aperto, writeContent");
-		return 0;
-	}
-	if (stat(f->abs_path, &s) == -1) {
-        perror("stat creazione file\n");
-		return 0;
-    }
-	f->content = malloc(s.st_size+1);
-	memset(f->content,0,s.st_size+1);
-	while((l = read(f->fd,f->content,s.st_size+1)) > 0);
-	if(l == -1){
-		perror("lettura file in writeContentFile");
-		return 0;
-	}
-	
-	f->o_create_flag = 0;
-	f->locked_flag = 0;
-	f->dim_bytes = s.st_size;
-	return 1;
-}
-
-
-void appendContent(file_t * f,void *buff,size_t size){
-	if(f->content == NULL){
-		f->content = malloc(size);
-		memset(f->content,0,size);
-		memcpy(f->content,buff,size);
-		f->dim_bytes = size;
-	}
-	else{
-		char content[f->dim_bytes + size +1];
-		memset(content,0,f->dim_bytes + size +1);
-		memcpy(content,f->content, f->dim_bytes);
-		strncat(content,(char*)buff, size );
-		free(f->content);
-		f->content = malloc(f->dim_bytes + size + 1);
-		memset(f->content, 0, f->dim_bytes + size + 1);
-		memcpy(f->content,content,f->dim_bytes + size +1);
-		
-		f->dim_bytes += size;
-	}
-
-}
-
-void free_file(file_t* file){
-	file->prec = NULL;
-	file->next = NULL;
-	if(file->content != NULL) free(file->content);
-	if(file->fd > 0) close(file->fd);
-	free(file->abs_path);
-	free(file);
-}
-void free_list(list* l){
-	while(l->head != NULL){
-		file_t *reject = l->head;
-		l->head = l->head->next;
-		free_file(reject);
-	}
-}
-
-void free_hash(hashtable *table){
-	for (int i=0; i < table->len; i++){
-		if(table->cell[i].head != NULL){
-			free_list(&table->cell[i]);
-		}
-	}
-	free_list(&table->cache);
-	free(table->cell);
-}
-
-
-
 
 int sendlistFiletoReject(list removed_files,int fd_toSend);
 void init_Stats();
@@ -238,7 +162,7 @@ int main(int argc, char *argv[]){
     //printf("Dare un nome al filelog.txt :\n");
     //scanf("%s",c);
     //setLogFile(c);
-    print_storageServer(storage);
+    //print_storageServer(storage);
     create_FileLog();
     free_hash(&storage);
     free_list(&files_rejected);
@@ -445,7 +369,6 @@ void* manager_thread_function(void* args){
                                 FD_CLR(i,&set);
                                 if(i == fdmax) fdmax = update_fdmax(set,fdmax);
                                 removeConnection_q(i);
-
                                 if(isEmpty_q() && flag_SigHup){
                                     flag_closeServer = 1;
                                     pthread_cond_broadcast(&cond_var_request);
@@ -832,6 +755,7 @@ int task_read_N_file(request* r, response* feedback){
                     errno = EAGAIN;
                     return 0;
                 }
+                if(!dim_toSend) dim_toSend = 18;
 
                 char buff[dim_toSend]; 
                 memset(buff, 0, dim_toSend);
@@ -839,7 +763,7 @@ int task_read_N_file(request* r, response* feedback){
                 if(temp.head->content == NULL)  memcpy(buff,"*NO DATA IN FILE*",18);
                 else  memcpy(buff ,temp.head->content, dim_toSend +1);
                 
-                if( writen( r->socket_fd, buff, dim_toSend) == -1 ){
+                if( writen( r->socket_fd, buff, dim_toSend + 1) == -1 ){
                     perror("Errore writen send content ");
                     return 0;
                 }

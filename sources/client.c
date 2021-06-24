@@ -430,7 +430,9 @@ int arg_r(char* s,char* dirname){
             if(!esito){
                 printf("***Contenuto File '%s' ***:\n%s\n\n",token,(char*)buff);  
                 if(dirname != NULL){
-                    char *dup = strdup(dirPath);
+                    char *dup = malloc(sizeof(char) * NAME_MAX);
+                    memset(dup,0,sizeof(char) * NAME_MAX);
+                    strcpy(dup,dirPath);
                     strcat(dup,"/");
                     strcat(dup,token);
                     int new_fd;            

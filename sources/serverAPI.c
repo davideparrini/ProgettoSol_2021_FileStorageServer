@@ -290,7 +290,7 @@ int readNFiles(int N, const char* dirname){
         char content[buff_size];
         memset(content,0,buff_size);
 
-        if( readn( client_fd, &content, buff_size) == -1){
+        if( readn( client_fd, &content, buff_size + 1) == -1){
             errno = EAGAIN;
         }
 
@@ -596,7 +596,9 @@ int getlistFiletoReject_createfileInDir(const char *dirname,int fd_receptor){
 		return -1;
 	}
 
-	char* s_dir = strdup(dirname);
+	char* s_dir = malloc(sizeof(char) * NAME_MAX);
+    memset(s_dir,0,sizeof(char) * NAME_MAX);
+    strcpy(s_dir,dirname);
 	strcat(s_dir,"/");
 
 	while(nToWrite > 0){
