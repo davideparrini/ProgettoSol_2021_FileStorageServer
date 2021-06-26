@@ -260,15 +260,18 @@ int readNFiles(int N, const char* dirname){
 
     if(writen(client_fd,&r,sizeof(r)) == -1){
         errno = EAGAIN;
-        return -1;
     }
 
     int n_to_read = 0;
     if(readn(client_fd,&n_to_read,sizeof(int)) == -1){
         errno = EAGAIN;
-        return -1;
     }
+    char* s_dir = malloc(sizeof(char) * NAME_MAX);
+    memset(s_dir,0,sizeof(char) * NAME_MAX);
+    strcpy(s_dir,dirname);
+    strcat(s_dir,"/");
     int i = 1;
+
     while(i <= n_to_read){
 
         char pathfile[NAME_MAX];
@@ -289,38 +292,33 @@ int readNFiles(int N, const char* dirname){
 
         char content[buff_size];
         memset(content,0,buff_size);
-
+                
         if( readn( client_fd, &content, buff_size + 1) == -1){
             errno = EAGAIN;
         }
-
         printf("****Contenuto file %d ' %s ':****\n%s\n\n", i, namefile, content);
-        
         if(flag_dirname){
-            char* s_dir = malloc(sizeof(char) * NAME_MAX);
-            memset(s_dir,0,sizeof(char) * NAME_MAX);
-            strcpy(s_dir,dirname);
-            strcat(s_dir,"/");
-            char* newfile_path = strcat(s_dir,namefile);
+            char* dup = malloc(sizeof(char) * NAME_MAX);
+            memset(dup,0,sizeof(char) * NAME_MAX);
+            strcpy(dup ,s_dir);
+            char* newfile_path = strcat(dup,namefile);
             int fd_new;
             if((fd_new = creat(newfile_path,0777)) == -1){
                 perror("Errore creazione file in readNfiles");
-                exit(EXIT_FAILURE);
             }
 
             if( write( fd_new, content, buff_size ) == -1){
                 perror("Errore write in readNfiles");
-                exit(EXIT_FAILURE);
             }
             close(fd_new);
-            free(s_dir);
+            free(dup);
         }
         i++;
     }
+    free(s_dir);
 
     if(readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
-        return -1;
     }
 
     if(n_to_read == 0){
@@ -334,16 +332,17 @@ int readNFiles(int N, const char* dirname){
         return -1;
     
     case READ_N_FILE_SUCCESS:
-        errno = 0;
-        return feedback.c;
+        printf("Read N File ha avuto successo\n");
+        break;
     
-    default: printf("?????\n");
-        return -1;
+    default: break;
     }
 
+    errno = 0;
+    return feedback.c;
 }
 int writeFile(const char* pathname, const char* dirname){
-    int flag_dirname  = 0;
+    int flag_dirname  = 0, flag_ok = 0;
     request r;
     response feedback;
     memset(&r,0,sizeof(request));
@@ -352,7 +351,6 @@ int writeFile(const char* pathname, const char* dirname){
 
 
     if(strlen(dirname) != 0) flag_dirname = 1;
-
     r.flags = flag_dirname;
     r.type = WRITE_FILE;
 
@@ -364,7 +362,12 @@ int writeFile(const char* pathname, const char* dirname){
         return -1;
     }
 
-    if(flag_dirname) getlistFiletoReject_createfileInDir(dirname,client_fd);
+    if(readn(client_fd,&flag_ok,sizeof(int)) == -1){
+        errno = EAGAIN;
+        return -1;
+    }
+
+    if(flag_ok && flag_dirname) getlistFiletoReject_createfileInDir(dirname,client_fd);
 
     if(readn(client_fd,&feedback,sizeof(feedback)) == -1){
         errno = EAGAIN;
@@ -396,7 +399,8 @@ int writeFile(const char* pathname, const char* dirname){
     default:
         break;
     } 
-        
+
+
     errno = 0;
     return 0;
 }
@@ -595,51 +599,43 @@ int getlistFiletoReject_createfileInDir(const char *dirname,int fd_receptor){
 		errno = EAGAIN;
 		return -1;
 	}
-
 	char* s_dir = malloc(sizeof(char) * NAME_MAX);
     memset(s_dir,0,sizeof(char) * NAME_MAX);
     strcpy(s_dir,dirname);
 	strcat(s_dir,"/");
-
 	while(nToWrite > 0){
 		char pathfile[NAME_MAX];
 		memset(pathfile,0,NAME_MAX);
-
 		if(readn(fd_receptor,&pathfile,NAME_MAX) == -1){
 			errno = EAGAIN;
 			return -1;
 		}
 
 		size_t sizeFile;
-
 		if(readn(fd_receptor,&sizeFile,sizeof(size_t)) == -1){
 			errno = EAGAIN;
 			return -1;
 		}
 		char content[sizeFile];
 		memset(content,0,sizeFile);
-
 		if(readn(fd_receptor,&content,sizeFile) == -1){
 			errno = EAGAIN;
 			return -1;
 		}
 
-
 		char* namefile = basename(pathfile);
 		char* newfile_path = strcat(s_dir,namefile);
-		
 		int fd_new,lung;
 		if((fd_new = creat(newfile_path,0777)) == -1){
-			perror("Errore creazione file in readNfiles");
+			perror("Errore creazione file in getlistFiletoReject_createfileInDir");
 			exit(EXIT_FAILURE);
 		}
 		if( write(fd_new, content,sizeFile) == -1){
-			perror("Errore wrtite in createFiles_fromDupList_inDir");
+			perror("Errore wrtite in getlistFiletoReject_createfileInDir");
 			exit(EXIT_FAILURE);
 		}
         close(fd_new);
-        free(newfile_path);
-        //free(&content);
+        nToWrite--;
     }
 
   free(s_dir);

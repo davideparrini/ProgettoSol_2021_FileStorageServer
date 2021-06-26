@@ -19,17 +19,6 @@ typedef struct node{
 	struct node *next;
     struct node *prec;
 }file_t;
-//struttura per mantenere il riferimento al file vero e proprio, 
-//avendo comunque la possibilità di metterlo in una struttura dati secondaria
-typedef struct dupf{
-	file_t* riferimento_file;
-	struct dupf *next;
-}dupFile_t;
-
-typedef struct temp_list{
-	dupFile_t *head;
-	int size;
-}dupFile_list;
 
 typedef struct _list{
 	int size;
@@ -102,20 +91,10 @@ void free_file(file_t* file);
 void free_list(list* l);
 void free_hash(hashtable* table);
 
+void print_list(file_t* head);
 void print_storageServer(hashtable table);
 list* concatList(list *l,list *l2);
 
-
-dupFile_t* init_dupFile(file_t* f);
-
-
-void init_dupFile_list(dupFile_list* l);
-
-void ins_head_dupFilelist(dupFile_list *l,dupFile_t *file);
-dupFile_t* pop_dupFilelist(dupFile_list *cell);
-void ins_dupList_to_list(hashtable* table, list* l, dupFile_list* dl);
-void free_duplist(dupFile_list* dl);
-int isEmpty_duplist(dupFile_list dl);
 
 
 #endif

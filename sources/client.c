@@ -338,11 +338,11 @@ int arg_w(char* s,char* dir_rejectedFile){
     char* dirname = strtok(s,",");
     char* dirpath = malloc(sizeof(char) * NAME_MAX);
     memset(dirpath,0,sizeof(char) * NAME_MAX);
-
     char* dir_rej_path = malloc(sizeof(char) * NAME_MAX);
     memset(dir_rej_path,0,sizeof(char) * NAME_MAX);
 
-    findDir_getAbsPath(testDirPath ,dirname,&dirpath);
+    if(!strcmp(dirname,".")) strcpy(dirpath,testDirPath);
+    else findDir_getAbsPath(testDirPath ,dirname,&dirpath);
 
     if(dir_rejectedFile != NULL){
         findDir_getAbsPath(testToSaveDirPath,dir_rejectedFile,&dir_rej_path);
@@ -355,7 +355,6 @@ int arg_w(char* s,char* dir_rejectedFile){
         flag_end = 1;
         n++;
     } 
-
     if(writeFileDir(dirpath,dir_rej_path,n,flag_end,&contatore_bytes_scritti,1)){
         esito = 0;
     }
@@ -381,7 +380,6 @@ int arg_W(char* s,char* dir_rejectedFile){
     if(dir_rejectedFile != NULL){
         findDir_getAbsPath(testToSaveDirPath,dir_rejectedFile,&bufdir);
     }
-
     while(token != NULL){
         char* buf = malloc(sizeof(char) * NAME_MAX);
         memset(buf, 0, sizeof(char) * NAME_MAX);
@@ -571,7 +569,10 @@ int arg_O(char* s){
     char* dirname = strtok(NULL,",");
     char* dirpath = malloc(sizeof(char) * NAME_MAX);
     memset(dirpath,0,sizeof(char) * NAME_MAX);
-    findDir_getAbsPath(testDirPath,dirname,&dirpath);
+
+    if(!strcmp(dirname,".")) strcpy(dirpath,testDirPath);
+    else findDir_getAbsPath(testDirPath ,dirname,&dirpath);
+    
     if(openFileDir(dirpath,o_flag,n,flag_end,1)){
         esito = 0;
     }
@@ -655,8 +656,8 @@ int arg_G(char* s){
         flag_end = 1;
         n++;
     } 
-
-    findDir_getAbsPath(testDirPath ,dirname,&dirpath);
+    if(!strcmp(dirname,".")) strcpy(dirpath,testDirPath);
+    else findDir_getAbsPath(testDirPath ,dirname,&dirpath);
 
     if(closeFileDir(dirpath,n,flag_end,1)){
         esito = 0;

@@ -66,8 +66,6 @@ int task_remove_file(request* r, response* feedback);
 void showDirLogs();
 void setLogFile();
 void create_FileLog();
-
-
 int sendlistFiletoReject(list removed_files,int fd_toSend);
 void init_Stats();
 
@@ -477,7 +475,7 @@ void* worker_thread_function(void* args){
 void do_task(request* r_from_client,response* feedback){
     //In caso di successo ritorna 1 else 0
     memset(feedback,0,sizeof(response));
-
+    
     switch (r_from_client->type){
 
     case OPEN_FILE:
@@ -534,8 +532,7 @@ void do_task(request* r_from_client,response* feedback){
         break;
     }
     //print_storageServer(storage);
-    //printf("\n\n");
-    //PRINT_ERRNO("do task",errno);
+
 
 }
 
@@ -554,6 +551,7 @@ int task_openFile(request* r, response* feedback){
             f->open_flag = 1;
             f->o_create_flag = 1;
             if(!init_file_inServer(&storage,f,&files_rejected)){
+                free_file(f);
                 feedback->type = NO_SPACE_IN_SERVER;
                 return 0;
             }
@@ -714,6 +712,8 @@ int task_read_file(request* r, response* feedback){
             perror("SEND CONTENT ERROR IN WRITEN");
             return 0;
         }
+
+        if(f->modified_flag) update_file(&storage,f);
         feedback->type = READ_FILE_SUCCESS;
         feedback->size = f->dim_bytes;
         return 1;
@@ -733,7 +733,7 @@ int task_read_N_file(request* r, response* feedback){
     size_t h = 0;
     int contatore_file_letti = 0; 
 
-    while(n_to_read > 0){
+    while(n_to_read > contatore_file_letti){
         list temp;
         if(h < storage.len) temp = storage.cell[h];
         else temp = storage.cache;
@@ -745,7 +745,6 @@ int task_read_N_file(request* r, response* feedback){
                 strncpy(namefile,temp.head->abs_path,NAME_MAX);
                 if( writen( r->socket_fd, namefile, NAME_MAX) == -1 ){
                     perror("Errore mentre spedisco il nome del file in readNFiles");
-                    return 0;
                 }
 
                 size_t dim_toSend = 0;
@@ -753,7 +752,6 @@ int task_read_N_file(request* r, response* feedback){
 
                 if( writen(r->socket_fd, &dim_toSend, sizeof(size_t)) == -1){
                     errno = EAGAIN;
-                    return 0;
                 }
                 if(!dim_toSend) dim_toSend = 18;
 
@@ -765,43 +763,57 @@ int task_read_N_file(request* r, response* feedback){
                 
                 if( writen( r->socket_fd, buff, dim_toSend + 1) == -1 ){
                     perror("Errore writen send content ");
-                    return 0;
                 }
         
                 contatore_file_letti++;
-                n_to_read--;
+                if(temp.head->modified_flag) update_file(&storage,temp.head);
             } 	
             temp.head = temp.head->next;
 		}
         h++;   
     }
-    if(n_to_read != 0){
+    
+    if(contatore_file_letti != n_to_read){
         feedback->type = READ_N_FILE_FAILURE;  
         return 0;  
     }
-    else{
-        feedback->type = READ_N_FILE_SUCCESS;
-        feedback->c = contatore_file_letti;
-        return 1;
-    }
+    feedback->type = READ_N_FILE_SUCCESS;
+    feedback->c = contatore_file_letti;
+    return 1;
+
 }
 
 int task_write_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 
     file_t* f = research_file(storage,r->pathfile);
+    int flag_ok = 0;
     if(f == NULL){
+        if(writen(r->socket_fd,&flag_ok,sizeof(int)) == -1){
+            errno = EAGAIN;
+            return -1;
+        }
         feedback->type = FILE_NOT_EXIST;
         return 0;
     }
     else{
         if(!f->locked_flag || !f->open_flag || !f->o_create_flag){
+            if(writen(r->socket_fd,&flag_ok,sizeof(int)) == -1){
+                errno = EAGAIN;
+                return -1;
+            }
             feedback->type = WRITE_FILE_FAILURE;
             return 0;
         }
         else{
+            
             list removed_files;
             init_list(&removed_files);
             if(ins_file_server(&storage,f,&removed_files)){
+                flag_ok = 1;
+                if(writen(r->socket_fd,&flag_ok,sizeof(int)) == -1){
+                    errno = EAGAIN;
+                    return -1;
+                }
                 if(r->flags){
                     if(!sendlistFiletoReject(removed_files,r->socket_fd)){
                         feedback->type =  CANNOT_SEND_FILES_REJECTED_BY_SERVER;
@@ -812,6 +824,10 @@ int task_write_file(request* r, response* feedback){
                 return 1;  
             }
             else{
+                if(writen(r->socket_fd,&flag_ok,sizeof(int)) == -1){
+                    errno = EAGAIN;
+                    return -1;
+                }
                 feedback->type = NO_SPACE_IN_SERVER;    
                 return 0;
             }
@@ -917,7 +933,7 @@ int task_lock_file(request* r, response* feedback){
 
 int task_close_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
-    int res = 0;
+
     file_t* file = research_file(storage,r->pathfile);
     if(file == NULL){
         feedback->type = FILE_NOT_EXIST;
@@ -925,21 +941,24 @@ int task_close_file(request* r, response* feedback){
     else{    
         if(file->open_flag == 0){
             feedback->type = FILE_NOT_OPEN;
-            return res;
+            return 0;
         }
-        file->open_flag = 0;
-        storage.n_files_free--;
-        feedback->type = CLOSE_FILE_SUCCESS;
-        res = 1;
+
         if(close(file->fd) == -1){
             perror("Errore close file, in task_close_file");
-            res = 0;
+            feedback->type = GENERIC_ERROR;
+            return 0;
         }
-        if(!res) feedback->type = GENERIC_ERROR;
+
+        file->open_flag = 0;
+        storage.n_files_free--;
         file->fd = -2;
+        if(file->modified_flag) update_file(&storage,file);
+        feedback->type = CLOSE_FILE_SUCCESS;
+        return 1;
     }
 
-    return res;
+    return 0;
 }
 
 int task_remove_file(request* r, response* feedback){
@@ -1002,11 +1021,11 @@ void create_FileLog(){
     fprintf(f,"Numero di file massimo memorizzato nel server : %d\n",storage.stat_max_n_file);
     printf("Numero di file massimo memorizzato nel server : %d\n",storage.stat_max_n_file);
     
-    fprintf(f,"Memoria attualmente utilizzata in Mbytes nel file storage : %.4lf\n",bytesToMb(storage.memory_used));
-    printf("Memoria attualmente utilizzata in Mbytes nel file storage : %.4lf\n",bytesToMb(storage.memory_used));
+    fprintf(f,"Memoria attualmente utilizzata in Mbytes nel file storage : %.4lf Kb\n",bytesToMb(storage.memory_used));
+    printf("Memoria attualmente utilizzata in Mbytes nel file storage : %.4lf Kb\n",bytesToMb(storage.memory_used));
 
-    fprintf(f,"Dimensione massima file in Kbytes raggiunta dal file storage : %lf\n",bytesToKb(storage.stat_dim_file));
-    printf("Dimensione massima file in Kbytes raggiunta dal file storage : %lf\n",bytesToKb(storage.stat_dim_file));
+    fprintf(f,"Dimensione massima file in Kbytes raggiunta dal file storage : %.2lf Kb\n",bytesToKb(storage.stat_dim_file));
+    printf("Dimensione massima file in Kbytes raggiunta dal file storage : %.2lf Kb\n",bytesToKb(storage.stat_dim_file));
 
     fprintf(f,"Numero di volte in cui l’algoritmo di rimpiazzamento della cache è stato eseguito per selezionare uno o più file “vittima” : %d\n",storage.stat_n_replacing_algoritm);
     printf("Numero di volte in cui l’algoritmo di rimpiazzamento della cache è stato eseguito per selezionare uno o più file “vittima” : %d\n",storage.stat_n_replacing_algoritm);  
@@ -1024,6 +1043,8 @@ void create_FileLog(){
 			}
 		}
 	}
+    fprintf(f,"\nin cache\n\n");
+    printf("\nin cache:\n\n");
     list temp = storage.cache;
     while (temp.head != NULL){
         fprintf(f,"- %s\n",temp.head->abs_path);
@@ -1116,9 +1137,10 @@ int sendlistFiletoReject(list removed_files,int fd_toSend){
         perror("Errore writen nToSend in writeFile");
         return 0;
     }
+
     while(nToSend > 0){
 		file_t* temp = removed_files.head;
-        char pathfile[NAME_MAX-1];
+        char pathfile[NAME_MAX];
         memset(pathfile,0,NAME_MAX);
         strncpy(pathfile,temp->abs_path,NAME_MAX);
 
@@ -1139,9 +1161,10 @@ int sendlistFiletoReject(list removed_files,int fd_toSend){
             perror("Errore writen content in writeFile");
             return 0;
         }
-		
+
 		removed_files.head = removed_files.head->next;
 		free_file(temp);
+        nToSend--;
     }
     return 1;
 }

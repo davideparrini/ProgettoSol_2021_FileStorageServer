@@ -60,6 +60,8 @@ cleanall:
 	-rm -f ./test_fileToSave/test_D/*
 	-rm -f ./test_fileToSave/test-d/*
 	-rm -f ./test/*.txt
+	-rm -f ./test/test1/*.txt
+	-rm -f ./test/test2/*.txt
 	-rm -f /tmp/server_sock
 	-rm -f $(TARGETS)
 

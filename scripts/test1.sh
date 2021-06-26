@@ -2,14 +2,14 @@
 
 echo "Test 1"
 
-  valgrind --leak-check=full ./server config &
+valgrind --leak-check=full ./server config &
 pid=$!
 
 
 
 sleep 3s
 
-./client /test/test1 -f /tmp/server_sock -o O_CREATE-O_LOCK:minni.txt -W minni.txt -r minni.txt -t 200 -p
+./client /test/test1 -f /tmp/server_sock -o O_CREATE-O_LOCK:minni.txt -W minni.txt -r minni.txt -d test-d -t 200 -p
 ./client /test/test1 -f /tmp/server_sock -O O_CREATE-O_LOCK,0:test_w -w test_w -R,2 -d test-d -t 200 -p
 ./client /test/test1 -f /tmp/server_sock -o O_CREATE:paperino.txt -a paperino.txt:PAPERO -r paperino.txt -C paperino.txt -r paperino.txt  -t 200 -p
 ./client /test/test1 -f /tmp/server_sock -G test_w -r pippo.txt -t 200 -p
@@ -19,6 +19,5 @@ sleep 3s
 
 sleep 2s
 
-echo $pid
 kill -s SIGHUP $pid
 wait $pid
