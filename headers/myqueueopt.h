@@ -8,12 +8,26 @@ typedef struct o__{
     char opt;
     char* optarg;
 
-}char_t;
+} char_t;
 
-void init_char_q(char opt, char* optarg);
-void push_char(char opt, char* optarg);
-char_t* pop_char();
-int isEmpty_charq();
+
+typedef struct{
+    char_t* head;
+    char_t* tail;
+    int size;
+
+} char_queue;
+
+
+
+
+void init_char_queue(char_queue* q);
+void init_char_t(char opt,char* optarg,char_queue* q);
+
+void push_char(char opt, char* optarg,char_queue* q);
+char_t* pop_char(char_queue* q);
+
+int isEmpty_charq(char_queue q);
 void free_char_t(char_t *c);
 
 

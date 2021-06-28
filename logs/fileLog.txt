@@ -1,36 +1,42 @@
-Numero di file attualmente nel server : 5
-Numero di file massimo memorizzato nel server : 5
-Memoria attualmente utilizzata in Mbytes nel file storage : 0.2918 Kb
-Dimensione massima file in Kbytes raggiunta dal file storage : 191.14 Kb
-Numero di volte in cui l’algoritmo di rimpiazzamento della cache è stato eseguito per selezionare uno o più file “vittima” : 0
+Numero di file attualmente nel server : 10
+Numero di file massimo memorizzato nel server : 10
+Memoria attualmente utilizzata in Mbytes nel file storage : 0.9528 Kb
+Dimensione massima file in Kbytes raggiunta dal file storage : 331.15 Kb
+Numero di volte in cui l’algoritmo di rimpiazzamento della cache è stato eseguito per selezionare uno o più file “vittima” : 4
 
 Lista dei file contenuti nello storage al momento della chiusura del server:
 
-- /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test1/test_w/pippo.txt
-- /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test1/test_w/progettosol-20_21.pdf
-- /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test1/test_w/pippo.png
-- /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test1/test_w/minni.txt
+- /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test2/test_overflow_bytes/pippo.jpg
+- /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test2/testOverflow_01.txt
+- /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test2/test_overflow_bytes/riven.jpg
+- /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test2/testOverflow_06.txt
+- /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test2/testOverflow_02.txt
+- /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test2/testOverflow_07.txt
+- /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test2/testOverflow_03.txt
+- /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test2/testOverflow_08.txt
+- /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test2/test_overflow_bytes/mario.jpg
 
 in cache
 
-- /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test1/paperino.txt
+- /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test2/testOverflow_09.txt
 
 
 Lista file espulsi dal server:
 
-**non sono stati espulsi file dal server**
-
+*rejected* /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test2/testOverflow_04.txt
+*rejected* /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test2/testOverflow_00.txt
+*rejected* /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test2/testOverflow_05.txt
 
 Statistiche operazioni:
 
-Numero di operazioni di openFile : 5
+Numero di operazioni di openFile : 14
 Numero di operazioni di closeFile : 0
-Numero di operazioni di readFile : 2
-Numero di operazioni di readNFile : 1
+Numero di operazioni di readFile : 0
+Numero di operazioni di readNFile : 0
 Numero di operazioni di writeFile : 4
-Numero di operazioni di appendFile : 1
+Numero di operazioni di appendFile : 11
 Numero di operazioni di removeFile : 0
 Numero di operazioni di lockFile : 0
 Numero di operazioni di unlockFile : 0
-Server chiuso tramite ricezione di :   SIGINT or SIGQUIT
+Server chiuso tramite ricezione di :   SIGHUP
 

@@ -3,6 +3,7 @@
 #include <signal.h>
 #include <myhashstoragefile.h>
 
+//struttura dati per memorizzare il numero di volte in cui le varie task(richieste) hanno avuto successo e sono state quindi completate
 typedef struct {
     int n_openfile;
     int n_closefile;
@@ -17,7 +18,7 @@ typedef struct {
 }stats;
 
 #define _POSIX_C_SOURCE 2001112L
-#define PATHCONFIG 50
+#define PATHCONFIG 200 
 
 
 static pthread_cond_t cond_var_request = PTHREAD_COND_INITIALIZER;
@@ -28,46 +29,102 @@ static pthread_mutex_t mutex_file = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mutex_pipe_signal = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mutex_pipe_WM = PTHREAD_MUTEX_INITIALIZER;
 
+//stringa contente la cartella di configuazione dei file config
 static char configFile_path[NAME_MAX] = {"configs/"};
+
+//stringa contente il path del file log
 static char logFile_path[NAME_MAX] = {"logs/fileLog.txt"};
+
+//variabile dove sono scritte tutte le configurazioni che servono al server per andare in esecuzione, prese dal file config scelto
 config configurazione;
+
+//hashtable del server, dove vengono memorizzati i file
 static hashtable storage;
+
+//lista di file vittima dell'algoritmo di rimpiazzamento(LRU)
 static list files_rejected;
+
+//variabile statistiche delle varie operazioni
 static stats stats_op;
+
+//pipe per la gestione dei segnali
 static int signal_pipe[2];
+
+//pipe per 
 static int pipeWorker_manager[2];
 
 #define VERDE 1
 #define ROSSO 0
+//flag per la gestione pipe WM
 static int flag_semaforo = VERDE;
 
 static int flag_SigHup = 0;
 static int flag_closeServer = 0;
 
+//Permette di vedere i file config all' interno della directory /config
 void showDirConfig();
+//Setta il file config da dove il server preleverà i dati necessari all'esecuzione del server
 void setConfigFile(char* s);
+
+//Setta il server con le varie impostazione del file config
 void setUpServer(config* Server);
+
+//Stampa a schermo le impostazioni del server
 void print_serverConfig();
+
+//unlinka il socket
 void cleanup();
+
+//gestore segnali
 static void *sigHandler(void *arg);
+
+//funzione da passare ai thread workers
 void* worker_thread_function(void* args);
+
+//funzione da passare al thread manager
 void* manager_thread_function(void* args);
-int update_fdmax(fd_set set, int fd_num);
-void handle_connection(int *pclient_socket);
+
+//ritorna il massimo fd attivo nell'fd_set passato
+int update_fdmax(fd_set set, int fd_max);
+
+//analizza la request passata ed esegue la task descritta
 void do_task(request* req_server,response *feedback);
+
+//esegue la task openFile
 int task_openFile(request* r, response* feedback);
+
+//esegue la task readFile
 int task_read_file(request* r, response* feedback);
+
+//esegue la task readNFile
 int task_read_N_file(request* r, response* feedback);
+
+//esegue la task writeFile
 int task_write_file(request* r, response* feedback);
+
 //int task_append_file(request* r, response* feedback);
 //int task_unlock_file(request* r, response* feedback);
+
+//esegue la task closeFile
 int task_close_file(request* r, response* feedback);
+
+//esegue la task removeFile
 int task_remove_file(request* r, response* feedback);
+
+//fa vedere il contenuto della cartella logs/
 void showDirLogs();
+
+//setta il nome del logfile da creare
 void setLogFile();
+
+//crea il file log, stampando a schermo il contenuto inserito al suo interno
 void create_FileLog();
+
+//manda la lista dei file da buttare al client
 int sendlistFiletoReject(list removed_files,int fd_toSend);
-void init_Stats();
+
+//inizializza a 0 tutte le statisiche della struttura dati stats
+void init_Stats(stats* statistiche_operazioni);
 
 int main(int argc, char *argv[]){
 
@@ -79,11 +136,13 @@ int main(int argc, char *argv[]){
     //showDirConfig();
     char c[PATHCONFIG];
     memset(c,0,PATHCONFIG);
+    // in argv[1] va passato il nome del file config (solo il nome senza passare .txt, esempio: config ) da dove prendo le informazioni di configurazione per il server 
     strcpy(c,argv[1]);
     //scanf("%s",c);
     setConfigFile(c);
     setUpServer(&configurazione);
     print_serverConfig();
+    //inizializzo tutte le strutture dati che utilizzo (hashtable di storage File, lista di file espulsi dallo storage e insieme di statistiche delle operazioni)
     init_hash(&storage,configurazione);
     init_list(&files_rejected);
     init_Stats(&stats_op);
@@ -93,11 +152,14 @@ int main(int argc, char *argv[]){
     pthread_t sighandler_thread;
 
     sigset_t mask;
+    //creo una maschera vuota
     sigemptyset(&mask);
+    //ed aggiungo solo i segnali SIGINT SIGQUIT SIGHUP
     sigaddset(&mask, SIGINT); 
     sigaddset(&mask, SIGQUIT);
     sigaddset(&mask, SIGHUP);
 
+    // Applico la maschera appena definita
     if (pthread_sigmask(SIG_SETMASK, &mask,NULL) != 0) {
 	    fprintf(stderr, "FATAL ERROR sigmask \n");
         cleanup();
@@ -183,6 +245,7 @@ void showDirConfig(){
     free(file);
     closedir(dir);
 }
+
 void setConfigFile(char * s){
     if(s != NULL) strcat(configFile_path,s);
     else{
@@ -191,6 +254,7 @@ void setConfigFile(char * s){
     }
     strcat(configFile_path,".txt");
 }
+
 void setUpServer(config *Server){
     char buff[NAME_MAX];
     FILE* conf;
@@ -249,9 +313,11 @@ void cleanup() {
 
 
 void* manager_thread_function(void* args){
+
     cleanup();
     atexit(cleanup);
-    int server_fd, client_fd, b, sig;
+
+    int server_fd, client_fd, b, sig; //b è l'intero utilizzato come risultato delle funzioni writen e readn
     SA serv_addr;
     
 
@@ -280,7 +346,7 @@ void* manager_thread_function(void* args){
     FD_SET(server_fd, &set);        // aggiungo il listener fd al master set
     FD_SET(signal_pipe[0], &set);  // aggiungo il descrittore di lettura della signal_pipe
     FD_SET(pipeWorker_manager[0], &set);
-    int fdmax = (server_fd > signal_pipe[0]) ? server_fd : signal_pipe[0];
+    int fdmax = (server_fd > signal_pipe[0]) ? server_fd : signal_pipe[0]; //prendo il massimo fd tra quelli utilizzati
     fdmax = (fdmax > pipeWorker_manager[0]) ? fdmax : pipeWorker_manager[0];
 
     printf("Pronto a ricevere connessioni!\n");
@@ -317,6 +383,7 @@ void* manager_thread_function(void* args){
                         }
                         pthread_mutex_unlock(&mutex_pipe_signal); 
                         if(sig == SIGINT || sig == SIGQUIT){
+                            //segnale ricevuto SIGINT O SIGQUIT, chiudo il server
                             pthread_mutex_lock(&mutex_request);
                             pthread_cond_broadcast(&cond_var_request);
                             pthread_mutex_unlock(&mutex_request);
@@ -324,12 +391,14 @@ void* manager_thread_function(void* args){
                             flag_closeServer = 1;
                         }
                         if(sig == SIGHUP){
+                            //segnale ricevuto SIGHUP, rimando la chiusura del server fino a che non ci sono più connessioni
                             pthread_mutex_lock(&mutex_connections);
                             close(server_fd);  
                             FD_CLR(server_fd,&set);
                             flag_SigHup = 1;
                             
-                            if(isEmpty_q()){
+                            if(isEmpty_q()){ 
+                                //mi riconduco al caso in cui avessi ricevuto un segnale SIGINT/SIGQUIT
                                 pthread_mutex_lock(&mutex_request);
                                 flag_closeServer = 1;
                                 pthread_cond_broadcast(&cond_var_request);
@@ -341,6 +410,7 @@ void* manager_thread_function(void* args){
                     }
                     else{   
                         if(i == pipeWorker_manager[0]){
+                            //lettura della pipe WM
                             int fd_pipe;
                             pthread_mutex_lock(&mutex_pipe_WM);
                             if((b = readn(pipeWorker_manager[0],&fd_pipe,sizeof(int)) == -1)){
@@ -349,6 +419,7 @@ void* manager_thread_function(void* args){
                             }
                             FD_SET(fd_pipe,&set);
                             if(fdmax < fd_pipe) fdmax = fd_pipe;
+                            //rimetto il flag_semaforo su verde in modo tale che sia di nuovo possibile scrivere sulla pipe
                             flag_semaforo = VERDE;
                             pthread_cond_signal(&cond_var_pipe_WM);
                             pthread_mutex_unlock(&mutex_pipe_WM);
@@ -361,7 +432,7 @@ void* manager_thread_function(void* args){
                                 perror("Errore readn request");
                                 exit(EXIT_FAILURE);
                             }
-                            if(b == 0){
+                            if(b == 0){ //EOF del fd
                                 close(i);
                                 pthread_mutex_lock(&mutex_connections);
                                 FD_CLR(i,&set);
@@ -374,6 +445,7 @@ void* manager_thread_function(void* args){
                                 pthread_mutex_unlock(&mutex_connections);
                             }
                             else{
+                                //Ascolto la richiesta ricevuta e la metto in coda alle altre
                                 r.socket_fd = i;
                                 FD_CLR(i,&set);
                                 if(i == fdmax) fdmax = update_fdmax(set,fdmax);
@@ -407,14 +479,14 @@ static void *sigHandler(void *arg) {
 
     while(1) {
         int sig,b;
-        int r = sigwait(set, &sig);
+        int r = sigwait(set, &sig); //aspetto un segnale
         if (r != 0) {
             errno = r;
             perror("FATAL ERROR 'sigwait'");
             return NULL;
         }
 
-        switch(sig) {
+        switch(sig) { // se è un segnale SIGINT/SIGQUIT/SIGHUP scrivo sulla pipe che ho ricevuto un segnale, e chiudo la pipe
         case SIGINT:
         case SIGHUP:
         case SIGQUIT:
@@ -436,10 +508,10 @@ void* worker_thread_function(void* args){
     while (1){
         pthread_mutex_lock(&mutex_request);
 
-        if(!flag_closeServer && isEmpty_r()){
+        if(!flag_closeServer && isEmpty_r()){ //se la lista di richieste è vuota e non ho ricevuto segnale di chiusura del server, metto in attesa il thread 
             pthread_cond_wait(&cond_var_request,&mutex_request);
         }
-        if(flag_closeServer){
+        if(flag_closeServer){ //thread svegliato, verifico prima di eseguire la richiesta se il server non è in stato di chiusura
             pthread_mutex_unlock(&mutex_request);
             pthread_exit(NULL);
         }
@@ -447,7 +519,7 @@ void* worker_thread_function(void* args){
         request *r;
         memset(&r,0,sizeof(r));   
 
-        r = pop_r();
+        r = pop_r(); // prendo la richiesta dalla coda e la eseguo
         pthread_mutex_unlock(&mutex_request);
         
         if(r != NULL){
@@ -540,12 +612,13 @@ void do_task(request* r_from_client,response* feedback){
 
 int task_openFile(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
-    //DA RIGUARDARE O_LOCK
+    
+    //cerco se il file è presente nello storageFile
     file_t* f = research_file(storage,r->pathfile);
 
     switch (r->flags){
  
-    case O_CREATE :
+    case O_CREATE : 
         if(f == NULL){
             f = init_file(r->pathfile);
             f->open_flag = 1;

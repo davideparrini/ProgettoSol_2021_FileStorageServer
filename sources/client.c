@@ -71,6 +71,8 @@ int main(int argc, char *argv[]){
     int opt, temp_opt = 0;
     int termina = 0;
     int f = 0, h = 0,p = 0;
+    char_queue c_queue;
+    init_char_queue(&c_queue);
 
     while((opt = getopt(argc, argv,"hf:w:W:D:r:R::d:t:l:u:c:po:O:a:C:G:")) != -1 && !termina){
 
@@ -93,11 +95,11 @@ int main(int argc, char *argv[]){
             break;
 
         case 'w':   
-            push_char(opt,optarg);
+            push_char(opt, optarg, &c_queue);
             break; 
 
         case 'W': 
-            push_char(opt,optarg);
+            push_char(opt,optarg, &c_queue);
             break;
 
         case 'D': 
@@ -106,16 +108,16 @@ int main(int argc, char *argv[]){
                 termina = 1;
                 break;
             }
-            push_char(opt,optarg);
+            push_char(opt,optarg, &c_queue);
             break;
 
         case 'r':
-            push_char(opt,optarg);
+            push_char(opt,optarg, &c_queue);
             break;
 
         case 'R':
-            if(optarg == NULL) push_char(opt,"0"); 
-            else push_char(opt,optarg); 
+            if(optarg == NULL) push_char(opt,"0", &c_queue); 
+            else push_char(opt,optarg, &c_queue); 
             break;
 
         case 'd': 
@@ -124,7 +126,7 @@ int main(int argc, char *argv[]){
                 termina = 1;
                 break;
             }
-            push_char(opt,optarg);
+            push_char(opt,optarg, &c_queue);
             break;
 
         case 't': 
@@ -140,7 +142,7 @@ int main(int argc, char *argv[]){
             break;
 
         case 'c': 
-            push_char(opt,optarg);
+            push_char(opt,optarg, &c_queue);
             break;
 
         case 'p':
@@ -153,28 +155,28 @@ int main(int argc, char *argv[]){
             break;
 
         case 'o': 
-            push_char(opt,optarg);
+            push_char(opt,optarg, &c_queue);
             break;
 
         case 'O': 
-            push_char(opt,optarg);
+            push_char(opt,optarg, &c_queue);
             break;
 
         case 'a': 
-            push_char(opt,optarg);
+            push_char(opt,optarg, &c_queue);
             break;
 
         case 'C': 
-            push_char(opt,optarg);
+            push_char(opt,optarg, &c_queue);
             break;
 
         case 'G': 
-            push_char(opt,optarg);
+            push_char(opt,optarg, &c_queue);
             break;
 
         case ':': 
             if(optopt == 'R'){
-                push_char(optopt,"0");
+                push_char(optopt,"0", &c_queue);
                 break;
             }
             if(optopt == 't'){
@@ -203,8 +205,8 @@ int main(int argc, char *argv[]){
         perror("Non connesso, errore in openConnection");
         exit(EXIT_FAILURE);
     }
-    while(!isEmpty_charq()){
-        char_t* c = pop_char();
+    while(!isEmpty_charq(c_queue)){
+        char_t* c = pop_char(&c_queue);
         switch (c->opt){
         case 'w':
             if(c->next != NULL){
