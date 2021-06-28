@@ -61,7 +61,9 @@ int hash(hashtable table,char *namefile);
 //operzioni su liste
 void ins_tail_list(list *cell,file_t *file);
 void ins_head_list(list *cell, file_t*file);
+file_t* pop_head_list(list *cell);
 file_t* pop_tail_list(list *cell);
+
 
 //insermento file nel server
 void ins_file_cache(hashtable *table,file_t* file); 
@@ -93,7 +95,7 @@ void free_hash(hashtable* table);
 
 void print_list(file_t* head);
 void print_storageServer(hashtable table);
-list* concatList(list *l,list *l2);
+void concatList(list *l,list *l2);
 
 
 

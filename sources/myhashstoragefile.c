@@ -148,7 +148,26 @@ void ins_tail_list(list *cell,file_t *file){
 	cell->size++;
 	cell->dim_bytes += file->dim_bytes;
 }
+file_t* pop_head_list(list *cell){
+	if(cell->size == 0){
+        return NULL; 
+    }
+	file_t* res = cell->head;
+	if(cell->size == 1){
+		cell->head = NULL;
+		cell->tail = NULL;
+	}
+	else{
+		cell->head = cell->head->next;
+		cell->head->prec = NULL;
+	}
+	res->next = NULL;
+	res->prec = NULL;
+	cell->size--;
+	cell->dim_bytes -= res->dim_bytes;
+	return res;
 
+}
 file_t* pop_tail_list(list *cell){
 	//rimouve e ritorna l'ultimo elemento della lista
     if(cell->size == 0){
@@ -593,16 +612,12 @@ int isContains_hash(hashtable table, file_t* file){
 }
 
 
-list* concatList(list *l,list *l2){
-	if(l->head != NULL && l2->head != NULL){
-		l->tail->next = l2->head;
-		l2->head->prec = l->tail;
-		l->size += l2->size;
-		l2->head = NULL;
-		l2->tail = NULL;
-		return l;
+void concatList(list *l,list *l2){
+	while(l2->head != NULL){
+		file_t* aux = pop_head_list(l2);
+		ins_tail_list(l,aux);
 	}
-	else return NULL;
+
 }
 
 void print_list(file_t* head){

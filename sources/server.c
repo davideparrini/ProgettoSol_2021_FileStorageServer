@@ -41,7 +41,7 @@ config configurazione;
 //hashtable del server, dove vengono memorizzati i file
 static hashtable storage;
 
-//lista di file vittima dell'algoritmo di rimpiazzamento(LRU)
+//lista di file rimossi dal server
 static list files_rejected;
 
 //variabile statistiche delle varie operazioni
@@ -736,7 +736,7 @@ int task_openFile(request* r, response* feedback){
 
 int task_read_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
-    int flag_ok = 1;
+    int flag_ok = 1; //questo flag serve per far combaciare le readn/writen server/client analizzando se i flag di apertura/lock, il contenuto del file siano ottimali per la lettura del file
 
     file_t* f = research_file(storage,r->pathfile);
 
@@ -795,7 +795,7 @@ int task_read_file(request* r, response* feedback){
 
 int task_read_N_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
-    int n_to_read;
+    int n_to_read; //Numero effettivo di file da leggere
     if(r->c <= 0 || r->c >= storage.n_files_free) n_to_read = storage.n_files_free;
     else n_to_read = r->c;
 
@@ -814,19 +814,19 @@ int task_read_N_file(request* r, response* feedback){
         while(temp.head != NULL && n_to_read > 0){
             if(temp.head->open_flag && !temp.head->locked_flag){
 
-                char namefile[NAME_MAX];
+                char namefile[NAME_MAX]; //invio il path del file
                 strncpy(namefile,temp.head->abs_path,NAME_MAX);
                 if( writen( r->socket_fd, namefile, NAME_MAX) == -1 ){
                     perror("Errore mentre spedisco il nome del file in readNFiles");
                 }
 
-                size_t dim_toSend = 0;
+                size_t dim_toSend = 0;  //invio la dimensione
                 if(temp.head->content != NULL)  dim_toSend = temp.head->dim_bytes;
 
                 if( writen(r->socket_fd, &dim_toSend, sizeof(size_t)) == -1){
                     errno = EAGAIN;
                 }
-                if(!dim_toSend) dim_toSend = 18;
+                if(!dim_toSend) dim_toSend = 18; 
 
                 char buff[dim_toSend]; 
                 memset(buff, 0, dim_toSend);
@@ -859,7 +859,7 @@ int task_read_N_file(request* r, response* feedback){
 int task_write_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 
     file_t* f = research_file(storage,r->pathfile);
-    int flag_ok = 0;
+    int flag_ok = 0; //flag che serve per far combaciare le writen/readn server/client, se i flag non sono quelli richiesti per effetturare una writefile, flag_ok rimane a 0
     if(f == NULL){
         if(writen(r->socket_fd,&flag_ok,sizeof(int)) == -1){
             errno = EAGAIN;
@@ -893,6 +893,9 @@ int task_write_file(request* r, response* feedback){
                         return 0;
                     }
                 }
+                print_list(removed_files.head);
+                concatList(&files_rejected,&removed_files);
+                print_list(files_rejected.head);
                 feedback->type = WRITE_FILE_SUCCESS;
                 return 1;  
             }
@@ -982,6 +985,7 @@ int task_append_file(request* r, response* feedback){
                     feedback->type =  CANNOT_SEND_FILES_REJECTED_BY_SERVER; 
                     return 0;
                 }
+                concatList(&files_rejected,&removed_files);
             }
             feedback->type = APPEND_FILE_SUCCESS;  
             return 1;
@@ -1128,16 +1132,16 @@ void create_FileLog(){
     fprintf(f,"\n\n");
     printf("\n\n");
 
-    fprintf(f,"Lista file espulsi dal server:\n\n");
-    printf("Lista file espulsi dal server:\n\n");
+    fprintf(f,"Lista file rimossi dal server:\n\n");
+    printf("Lista file rimossi dal server:\n\n");
 
     if(isEmpty(files_rejected)){
-        fprintf(f,"**non sono stati espulsi file dal server**\n\n");
-        printf("**non sono stati espulsi file dal server**\n\n");
+        fprintf(f,"**non sono stati rimossi file dal server**\n\n");
+        printf("**non sono stati rimossi file dal server**\n\n");
     }    
     while(!isEmpty(files_rejected)){
-        fprintf(f,"*rejected* %s\n",files_rejected.head->abs_path);
-        printf("*rejected* %s\n",files_rejected.head->abs_path);
+        fprintf(f,"*removed* %s\n",files_rejected.head->abs_path);
+        printf("*removed* %s\n",files_rejected.head->abs_path);
         file_t* temp = files_rejected.head;
         files_rejected.head = files_rejected.head->next;
         free_file(temp);
@@ -1236,7 +1240,6 @@ int sendlistFiletoReject(list removed_files,int fd_toSend){
         }
 
 		removed_files.head = removed_files.head->next;
-		free_file(temp);
         nToSend--;
     }
     return 1;
