@@ -22,7 +22,6 @@ typedef struct f{
     int flags;
     int c; //contatore generico
     char pathfile[NAME_MAX];
-    char dirpath[NAME_MAX];
     size_t request_size;
     req_type type;
 }request;

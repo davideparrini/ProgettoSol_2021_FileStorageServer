@@ -37,7 +37,6 @@ typedef struct s{
     int flags;
     int c; //contatore generico
     size_t size;
-    int len;
 }response;
 
 #endif

@@ -379,7 +379,6 @@ int ins_file_server(hashtable* table, file_t *f,list* list_reject){
 		printf("Server pieno e non ci sono file modificati nel server\nImpossibile inserire file\n");
 		return 0;
 	}
-	printf("Capacità server : %ld\tmemory used: %ld\nmemory mod_files: %ld\tfile->dim %ld\n\n",table->memory_capacity,table->memory_used,table->memory_used_from_modified_files,s.st_size);
 	if(table->memory_capacity < table->memory_used - table->memory_used_from_modified_files + s.st_size){
 		printf("Server pieno e non c è abbastanza spazio nel server\nImpossibile inserire file\n");
 		return 0;

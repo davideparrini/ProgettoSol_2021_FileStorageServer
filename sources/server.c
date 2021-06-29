@@ -42,7 +42,7 @@ config configurazione;
 static hashtable storage;
 
 //lista di file rimossi dal server
-static list files_rejected;
+static list files_removed;
 
 //variabile statistiche delle varie operazioni
 static stats stats_op;
@@ -144,7 +144,7 @@ int main(int argc, char *argv[]){
     print_serverConfig();
     //inizializzo tutte le strutture dati che utilizzo (hashtable di storage File, lista di file espulsi dallo storage e insieme di statistiche delle operazioni)
     init_hash(&storage,configurazione);
-    init_list(&files_rejected);
+    init_list(&files_removed);
     init_Stats(&stats_op);
 
     pthread_t thread_manager;
@@ -225,7 +225,7 @@ int main(int argc, char *argv[]){
     //print_storageServer(storage);
     create_FileLog();
     free_hash(&storage);
-    free_list(&files_rejected);
+    free_list(&files_removed);
     cleanup();
     return 0;
 }
@@ -623,7 +623,7 @@ int task_openFile(request* r, response* feedback){
             f = init_file(r->pathfile);
             f->open_flag = 1;
             f->o_create_flag = 1;
-            if(!init_file_inServer(&storage,f,&files_rejected)){
+            if(!init_file_inServer(&storage,f,&files_removed)){
                 free_file(f);
                 feedback->type = NO_SPACE_IN_SERVER;
                 return 0;
@@ -680,7 +680,7 @@ int task_openFile(request* r, response* feedback){
             f->open_flag = 1;
             f->o_create_flag = 1;
             f->locked_flag = 1;
-            if(!init_file_inServer(&storage,f,&files_rejected)){
+            if(!init_file_inServer(&storage,f,&files_removed)){
                 feedback->type = NO_SPACE_IN_SERVER;
                 return 0;
             }
@@ -893,9 +893,7 @@ int task_write_file(request* r, response* feedback){
                         return 0;
                     }
                 }
-                print_list(removed_files.head);
-                concatList(&files_rejected,&removed_files);
-                print_list(files_rejected.head);
+                concatList(&files_removed,&removed_files);
                 feedback->type = WRITE_FILE_SUCCESS;
                 return 1;  
             }
@@ -985,7 +983,7 @@ int task_append_file(request* r, response* feedback){
                     feedback->type =  CANNOT_SEND_FILES_REJECTED_BY_SERVER; 
                     return 0;
                 }
-                concatList(&files_rejected,&removed_files);
+                concatList(&files_removed,&removed_files);
             }
             feedback->type = APPEND_FILE_SUCCESS;  
             return 1;
@@ -1053,7 +1051,7 @@ int task_remove_file(request* r, response* feedback){
         file->locked_flag = 1;
         pthread_mutex_lock(&mutex_file);
         remove_file_server(&storage,file);
-        ins_tail_list(&files_rejected,file);
+        ins_tail_list(&files_removed,file);
         pthread_mutex_unlock(&mutex_file);
         feedback->type = REMOVE_FILE_SUCCESS;
         res = 1;
@@ -1091,7 +1089,9 @@ void create_FileLog(){
     if((f= fopen(logFile_path,"w+")) == NULL){
         perror("Errore creazione filelog");
     }
-    
+    fprintf(f,"\nSTATISTICHE ALLA CHIUSURA DEL SERVER\n\n");
+    printf("\nSTATISTICHE ALLA CHIUSURA DEL SERVER\n\t\t contenuto file Log:\n\n");
+
     fprintf(f,"Numero di file attualmente nel server : %d\n",storage.n_file);
     printf("Numero di file attualmente nel server : %d\n",storage.n_file);
     
@@ -1135,15 +1135,15 @@ void create_FileLog(){
     fprintf(f,"Lista file rimossi dal server:\n\n");
     printf("Lista file rimossi dal server:\n\n");
 
-    if(isEmpty(files_rejected)){
+    if(isEmpty(files_removed)){
         fprintf(f,"**non sono stati rimossi file dal server**\n\n");
         printf("**non sono stati rimossi file dal server**\n\n");
     }    
-    while(!isEmpty(files_rejected)){
-        fprintf(f,"*removed* %s\n",files_rejected.head->abs_path);
-        printf("*removed* %s\n",files_rejected.head->abs_path);
-        file_t* temp = files_rejected.head;
-        files_rejected.head = files_rejected.head->next;
+    while(!isEmpty(files_removed)){
+        fprintf(f,"*removed* %s\n",files_removed.head->abs_path);
+        printf("*removed* %s\n",files_removed.head->abs_path);
+        file_t* temp = files_removed.head;
+        files_removed.head = files_removed.head->next;
         free_file(temp);
     }
     

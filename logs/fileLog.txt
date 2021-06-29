@@ -1,6 +1,9 @@
+
+STATISTICHE ALLA CHIUSURA DEL SERVER
+
 Numero di file attualmente nel server : 5
 Numero di file massimo memorizzato nel server : 5
-Memoria attualmente utilizzata in Mbytes nel file storage : 0.2919 Kb
+Memoria attualmente utilizzata in Mbytes nel file storage : 0.2922 Kb
 Dimensione massima file in Kbytes raggiunta dal file storage : 191.14 Kb
 Numero di volte in cui l’algoritmo di rimpiazzamento della cache è stato eseguito per selezionare uno o più file “vittima” : 0
 
@@ -16,7 +19,7 @@ in cache
 - /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test1/paperino.txt
 
 
-Lista file espulsi dal server:
+Lista file rimossi dal server:
 
 *removed* /mnt/c/Users/Davide Parrini/Desktop/Progetto/GitHub/ProgettoSol_FileStorageServer/test/test1/test_w/pippo.txt
 

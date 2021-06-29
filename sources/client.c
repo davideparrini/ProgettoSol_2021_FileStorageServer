@@ -4,48 +4,100 @@
 
 #define MAX_SOCKET_PATH 256
 
+//path della cartella corrente
 char cwdPath[NAME_MAX];
+//path della cartella di test da utilizzare
 char testDirPath[NAME_MAX];
+//path della cartella di test dove vengono salvati i file
 char testToSaveDirPath[NAME_MAX];
+
 char* socket_path;
+
 int client_fd;
+
+//flag_stamp_op == 0 -> stampe per operazioni disabilitate, == 1 -> abilitate
 static int flag_stamp_op = 0;
+
+//millisecondi da aspettare  tra una richiesta e l'altra, modificabile con l'opzione '-t'
 static int msec_between_req = 0;
 
+//variabile per memorizzare quanti bytes letti o scritti in una richiesta (necessario se le stampe per operazioni sono abilitate), non è static perchè la variabile viene modificata nell'api
 size_t print_bytes_readNFiles = 0;
 
+//funzione per l'opzione '-h'
 int arg_h(char* s);
+
+//funzione per l'opzione '-f'
 int arg_f(char* newsock,char* oldsock);
+
+//funzione per l'opzione '-w' e '-D'
 int arg_w(char* s,char* dir_rejectedFile);
+
+//funzione per l'opzione '-W' e '-D'
 int arg_W(char* s,char* dir_rejectedFile);
+
+//funzione per l'opzione '-r e '-d'
 int arg_r(char* s,char* dirname);
+
+//funzione per l'opzione '-R' e '-d'
 int arg_R(int n,char* dirname);
+
+//funzione per l'opzione '-t'
 int arg_t(int mill_sec);
+
 //int arg_l(char* s);
 //int arg_u(char* s);
+
+//funzione per l'opzione '-c', removeFile
 int arg_c(char* s);
+
+//funzione per l'opzione '-p'
 int arg_p();
 
+//funzione per l'opzione '-o' , l'opzione '-o' permette di aprire una lista di file con flag di open (o_flag) specificati, es:  -o O_CREATE-O_LOCK:pippo.txt,minni.txt
 int arg_o(char* s);
+
+//funzione per l'opzione '-O' , l'opzione '-O' permette di aprire N file di una directory con flag di open (o_flag) specificati, es:  -O O_CREATE-O_LOCK,2:. ('.' == directory corrente)
 int arg_O(char* s);
+
+//funzione per l'opzione '-a' , l'opzione '-a' permette di fare una appendFile su file, es:  -a pippo.txt:"Ciao pippo"
 int arg_a(char* s,char* dirname);
+
+//funzione per l'opzione '-C' , l'opzione '-C' permette di chiudere una lista di file, es:  -C pippo.txt,minni.txt
 int arg_C(char* s);
+
+//funzione per l'opzione '-G' , l'opzione '-G' permette di chiudere una lista di file, es:  -G pippo.txt,minni.txt
 int arg_G(char* s);
 
+/*
+    Cerca nella directory 'dirpath'  n file da scrivere(eseguire la writeFile), se il flag_end == 1, significa che si deve eseguire l'operazione su tutti i file della directory,
+    e quindi visitare ricorsivamente tutta la directory. Il flag tutto_ok == 1 se è andato tutto bene e non ci sono stati intoppi durante l'esecuzione, altrimenti se è == 0 fa fallire tutte le chiamate ricorsive utilizzate,
+    dando come risutato -1.
+*/
 int writeFileDir(char* dirpath,char* dir_rejectedFile,int n,int flag_end,size_t* written_bytes,int tutto_ok);
+/*
+    Cerca nella directory 'dirpath'  n file da aprire(eseguire la openFile), se il flag_end == 1, significa che si deve eseguire l'operazione su tutti i file della directory,
+    e quindi visitare ricorsivamente tutta la directory. Il flag tutto_ok == 1 se è andato tutto bene e non ci sono stati intoppi durante l'esecuzione, altrimenti se è == 0 fa fallire tutte le chiamate ricorsive utilizzate,
+    dando come risutato -1.
+*/
 int openFileDir(char* dirpath,int o_flag,int n,int flag_end,int tutto_ok);
+/*
+    Cerca nella directory 'dirpath'  n file da chiudere(eseguire la closeFile), se il flag_end == 1, significa che si deve eseguire l'operazione su tutti i file della directory,
+    e quindi visitare ricorsivamente tutta la directory. Il flag tutto_ok == 1 se è andato tutto bene e non ci sono stati intoppi durante l'esecuzione, altrimenti se è == 0 fa fallire tutte le chiamate ricorsive utilizzate,
+    dando come risutato -1.
+*/
 int closeFileDir(char* dirpath,int n,int flag_end,int tutto_ok);
 
 int main(int argc, char *argv[]){
     
     if(argc < 3){
-        printf("Pochi argomenti!\n");
+        printf("Pochi argomenti!\nesempio con argomenti minimi:\n./client /test/test1 -f /tmp/server_sock");
         exit(EXIT_FAILURE);
     }
-
-    getcwd(cwdPath,NAME_MAX);
+    //deve essere passata la directory test
+    getcwd(cwdPath,NAME_MAX); //ottengo il path assoluto della directory corrente
     strcpy(testDirPath,cwdPath);
-    strcpy(testToSaveDirPath,cwdPath);
+    strcpy(testToSaveDirPath,cwdPath); 
 
     char test[NAME_MAX];
     memset(test,0,NAME_MAX);
@@ -71,11 +123,12 @@ int main(int argc, char *argv[]){
     int opt, temp_opt = 0;
     int termina = 0;
     int f = 0, h = 0,p = 0;
-    char_queue c_queue;
+    char_queue c_queue; //inizializzo una queue di char
     init_char_queue(&c_queue);
 
     while((opt = getopt(argc, argv,"hf:w:W:D:r:R::d:t:l:u:c:po:O:a:C:G:")) != -1 && !termina){
-
+        //prima faccio un getopt per filtrare i comandi che servono per configurare il server ('-f' (obbligatoria) , '-t','-p') o se l'opzione è '-h' concludere il server
+        //quindi le opzioni rimanenti (w W D r R d l u c o O a C G) vengono messe in una char_queue in modo da essere scandite ed eseguite successivamente 
         switch (opt){
         case 'h': 
             if(h){
@@ -196,20 +249,23 @@ int main(int argc, char *argv[]){
         msleep(msec_between_req); 
         temp_opt = opt;
     }
+
     if(!f){
         printf("Nome del socket non è stato passato!\nL'opzione '-f' è obbligatoria!\n");
         exit(EXIT_FAILURE);
     }
-
+    //le operazioni messe nella char_queue sono quelle che necessitano una connessione al server e sono relative ad esso
+    //apro una connessione al server
     if(openConnection(socket_path,msec,timer_connection) == -1){
         perror("Non connesso, errore in openConnection");
         exit(EXIT_FAILURE);
     }
+    //scandisco la char_queue
     while(!isEmpty_charq(c_queue)){
         char_t* c = pop_char(&c_queue);
         switch (c->opt){
         case 'w':
-            if(c->next != NULL){
+            if(c->next != NULL){ //controllo se la prossima richiesta è una -D, in tal caso soddisfo direttamente l'opzione -D contemporaneamente a quella attuale
                 if(c->next->opt == 'D') arg_w(c->optarg,c->next->optarg);
                 else arg_w(c->optarg,NULL);
             }   
@@ -217,7 +273,7 @@ int main(int argc, char *argv[]){
             break; 
 
         case 'W': 
-            if(c->next != NULL){
+            if(c->next != NULL){//controllo se la prossima richiesta è una -D, in tal caso soddisfo direttamente l'opzione -D contemporaneamente a quella attuale
                 if(c->next->opt == 'D') arg_W(c->optarg,c->next->optarg);
                 else arg_W(c->optarg,NULL);
             }   
@@ -228,7 +284,7 @@ int main(int argc, char *argv[]){
             break;
 
         case 'r':
-            if(c->next != NULL){
+            if(c->next != NULL){//controllo se la prossima richiesta è una -d, in tal caso soddisfo direttamente l'opzione -d contemporaneamente a quella attuale
                 if(c->next->opt == 'd') arg_r(c->optarg,c->next->optarg);
                 else arg_r(c->optarg,NULL);
             }   
@@ -236,7 +292,7 @@ int main(int argc, char *argv[]){
             break;
 
         case 'R':
-            if(c->next != NULL){
+            if(c->next != NULL){//controllo se la prossima richiesta è una -d, in tal caso soddisfo direttamente l'opzione -d contemporaneamente a quella attuale
                 if(c->next->opt == 'd'){
                     arg_R(atoi(c->optarg),c->next->optarg);
                 }
@@ -269,7 +325,7 @@ int main(int argc, char *argv[]){
             break;
 
         case 'a': 
-            if(c->next != NULL){
+            if(c->next != NULL){ //controllo se la prossima richiesta è una -D, in tal caso soddisfo direttamente l'opzione -D contemporaneamente a quella attuale
                 if(c->next->opt == 'D') arg_a(c->optarg,c->next->optarg);
                 else arg_a(c->optarg,NULL);
             }   
@@ -288,11 +344,11 @@ int main(int argc, char *argv[]){
             break;
         }
 
-        free_char_t(c);
-        msleep(msec_between_req);  
+        free_char_t(c); 
+        msleep(msec_between_req);  //dormo per msec decisi con l'opzione -t
     }
 
-
+    //Chiusura del client
     if(closeConnection(socket_path) == -1){
         perror("Errore closeConnection");
         fprintf(stderr, "closeConnection Value of errno : %d\n", errno);
@@ -318,11 +374,11 @@ int arg_h(char* s){
     printf("-p\tabilita le stampe sullo standard output per ogni operazione\n\n");
     printf("\nLe opzioni '-h' '-p' '-f' non possono essere ripetute, eventuali ripetizioni verranno ignorate\n\n\n");
     printf("-o o_flag:file1[,file2]...\t(possono essere assunti come o_flag O_CREATE O_LOCK O_NOFLAGS ed essere messi in or bit a bit usando '-', ad esempio O_CREATE-O_LOCK) apre i file con i flag specificati\n\n");
-    printf("-O o_flag,N:dirname\t(possono essere assunti come o_flag O_CREATE O_LOCK O_NOFLAGS ed essere messi in or bit a bit usando '-', ad esempio O_CREATE-O_LOCK) apre 'N'(se N == 0, apre tutti i file) file nella directory 'dirname' con i flag specificati\n\n");
+    printf("-O o_flag:dirname[,n=0]\t(possono essere assunti come o_flag O_CREATE O_LOCK O_NOFLAGS ed essere messi in or bit a bit usando '-',\n\t\tad esempio O_CREATE-O_LOCK) apre 'N'(se N == 0 o non specificato, apre tutti i file) file nella directory 'dirname' con i flag specificati\n\n");
     printf("-a file:TestoToAppend\tfa un append di 'TestoToAppend' al file specificato\n\n");
     printf("-C file1[,file2]...\tchiude i file aperti specificati\n\n");
     printf("-G dirname[,n=0]\tchiude 'n' (n può essere non specificato o == 0 in tal caso chiude tutti i file della directory) file della directory specificata\n\n");
-
+    printf("\nChiusura del client!\n\n");
     return 0;
 }
 
@@ -334,8 +390,8 @@ int arg_f(char* newsock,char* oldsock){
     return 0;
 }
 
-int arg_w(char* s,char* dir_rejectedFile){
-    int esito = 0;
+int arg_w(char* s,char* dir_rejectedFile){ //s = argomento dell'opzione -w, dir_rejectedFile = argomento dell'opzione -D
+    int esito = 0; 
     size_t contatore_bytes_scritti = 0;
     char* dirname = strtok(s,",");
     char* dirpath = malloc(sizeof(char) * NAME_MAX);
@@ -343,7 +399,7 @@ int arg_w(char* s,char* dir_rejectedFile){
     char* dir_rej_path = malloc(sizeof(char) * NAME_MAX);
     memset(dir_rej_path,0,sizeof(char) * NAME_MAX);
 
-    if(!strcmp(dirname,".")) strcpy(dirpath,testDirPath);
+    if(!strcmp(dirname,".")) strcpy(dirpath,testDirPath); //in testDirPath è contenuto il path della directory di test
     else findDir_getAbsPath(testDirPath ,dirname,&dirpath);
 
     if(dir_rejectedFile != NULL){
@@ -371,7 +427,7 @@ int arg_w(char* s,char* dir_rejectedFile){
     return esito;
 }
 
-int arg_W(char* s,char* dir_rejectedFile){
+int arg_W(char* s,char* dir_rejectedFile){ //s = argomento dell'opzione -W, dir_rejectedFile = argomento dell'opzione -D
     int esito = 0;
     char* token = strtok(s,",");
     size_t size = 0;
@@ -404,7 +460,7 @@ int arg_W(char* s,char* dir_rejectedFile){
     return esito;
 }
 
-int arg_r(char* s,char* dirname){
+int arg_r(char* s,char* dirname){ //s = argomento dell'opzione -r, dirname = argomento dell'opzione -d
     char* token = strtok(s,",");
     char *dirPath = malloc(sizeof(char) * NAME_MAX);
     memset(dirPath,0, sizeof(char) * NAME_MAX);
@@ -463,7 +519,7 @@ int arg_r(char* s,char* dirname){
     } 
     return 1;
 }
-int arg_R(int n, char* dirname){
+int arg_R(int n, char* dirname){ //n = argomento dell'opzione -R trasformata in numero , dirname = argomento dell'opzione -d
     int esito = 0;
     char* bufdir = malloc(sizeof(char) * NAME_MAX);
     memset(bufdir, 0, sizeof(char) * NAME_MAX);
@@ -555,22 +611,23 @@ int arg_o(char* s){
 int arg_O(char* s){
     int esito = 0,o_flag,n,flag_end = 0;
 
-    char* flag = strtok(s,",");
+    char* flag = strtok(s,":");
     if(!strcmp(flag,"O_CREATE")) o_flag = O_CREATE;
     else if(!strcmp(flag,"O_LOCK")) o_flag = O_LOCK;
     else if(!strcmp(flag,"O_CREATE-O_LOCK")) o_flag = O_CREATE|O_LOCK;
     else if(!strcmp(flag,"O_NOFLAGS")) o_flag = O_NOFLAGS;
-    char* nfile = strtok(NULL,":");
-    if(nfile != NULL) n = atoi(nfile);
-    else printf("Non sono stati passati i parametri giusti\n");
-    if(n == 0){
-        flag_end = 1;
-        n++;
-    } 
 
     char* dirname = strtok(NULL,",");
     char* dirpath = malloc(sizeof(char) * NAME_MAX);
     memset(dirpath,0,sizeof(char) * NAME_MAX);
+
+    char* nfile = strtok(NULL,",");
+    if(nfile != NULL) n = atoi(nfile);
+    else n = 0;
+    if(n == 0){
+        flag_end = 1;
+        n++;
+    } 
 
     if(!strcmp(dirname,".")) strcpy(dirpath,testDirPath);
     else findDir_getAbsPath(testDirPath ,dirname,&dirpath);
@@ -591,7 +648,7 @@ int arg_O(char* s){
 
 
 
-int arg_a(char* s,char* dirname){
+int arg_a(char* s,char* dir_rejectedFile){ //s = argomento dell'opzione -w, dir_rejectedFile = argomento dell'opzione -D
     int esito = 0;
     char* token = strtok(s,":");
     char* content = strtok(NULL,"");
@@ -602,8 +659,8 @@ int arg_a(char* s,char* dirname){
     char* bufdir = malloc(sizeof(char) * NAME_MAX);
     memset(bufdir,0,sizeof(char) * NAME_MAX);
 
-    if(dirname != NULL){
-        findDir_getAbsPath(testToSaveDirPath,dirname,&bufdir);
+    if(dir_rejectedFile != NULL){
+        findDir_getAbsPath(testToSaveDirPath,dir_rejectedFile,&bufdir);
     }
 
     findFile_getAbsPath(testDirPath,token,&buffer);

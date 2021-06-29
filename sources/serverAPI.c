@@ -79,7 +79,7 @@ int closeConnection(const char* sockname){
 
         return -1;
     }
-    printf("\nConnessione terminata!\n");
+    printf("Connessione terminata!\n\n\n");
     return 0;
 }
 

@@ -7,7 +7,7 @@ pid=$!
 
 sleep 3s
 #test sull'overflow di memoria
-./client /test/test2 -f /tmp/server_sock -O O_CREATE-O_LOCK,3:test_overflow_bytes -w test_overflow_bytes,3 -p
+./client /test/test2 -f /tmp/server_sock -O O_CREATE-O_LOCK:test_overflow_bytes,3 -w test_overflow_bytes,3 -p
 ./client /test/test2 -f /tmp/server_sock -a albero.jpg:ALBERO -o O_CREATE-O_LOCK:riven.jpg -W riven.jpg -D test_D -p
 
 #test sul numero massimo file memorizzati nel server
