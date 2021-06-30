@@ -3,7 +3,7 @@ STATISTICHE ALLA CHIUSURA DEL SERVER
 
 Numero di file attualmente nel server : 5
 Numero di file massimo memorizzato nel server : 5
-Memoria attualmente utilizzata in Mbytes nel file storage : 0.2922 Kb
+Memoria attualmente utilizzata in Mbytes nel file storage : 0.2923 Kb
 Dimensione massima file in Kbytes raggiunta dal file storage : 191.14 Kb
 Numero di volte in cui l’algoritmo di rimpiazzamento della cache è stato eseguito per selezionare uno o più file “vittima” : 0
 

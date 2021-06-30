@@ -51,7 +51,7 @@ static stats stats_op;
 static int signal_pipe[2];
 
 //pipe per 
-static int pipeWorker_manager[2];
+static int pipeWorker_Manager[2];
 
 #define VERDE 1
 #define ROSSO 0
@@ -171,7 +171,7 @@ int main(int argc, char *argv[]){
         cleanup();
         exit(EXIT_FAILURE); 
     }
-    if ((pipe(pipeWorker_manager))==-1) {
+    if ((pipe(pipeWorker_Manager))==-1) {
 	    perror("pipeWM");
         cleanup();
         exit(EXIT_FAILURE); 
@@ -345,9 +345,9 @@ void* manager_thread_function(void* args){
 
     FD_SET(server_fd, &set);        // aggiungo il listener fd al master set
     FD_SET(signal_pipe[0], &set);  // aggiungo il descrittore di lettura della signal_pipe
-    FD_SET(pipeWorker_manager[0], &set);
+    FD_SET(pipeWorker_Manager[0], &set);
     int fdmax = (server_fd > signal_pipe[0]) ? server_fd : signal_pipe[0]; //prendo il massimo fd tra quelli utilizzati
-    fdmax = (fdmax > pipeWorker_manager[0]) ? fdmax : pipeWorker_manager[0];
+    fdmax = (fdmax > pipeWorker_Manager[0]) ? fdmax : pipeWorker_Manager[0];
 
     printf("Pronto a ricevere connessioni!\n");
     int termina = 0;
@@ -409,11 +409,11 @@ void* manager_thread_function(void* args){
                         }   
                     }
                     else{   
-                        if(i == pipeWorker_manager[0]){
+                        if(i == pipeWorker_Manager[0]){
                             //lettura della pipe WM
                             int fd_pipe;
                             pthread_mutex_lock(&mutex_pipe_WM);
-                            if((b = readn(pipeWorker_manager[0],&fd_pipe,sizeof(int)) == -1)){
+                            if((b = readn(pipeWorker_Manager[0],&fd_pipe,sizeof(int)) == -1)){
                                 perror("Errore readn pipeWM");
                                 exit(EXIT_FAILURE);
                             }
@@ -532,7 +532,7 @@ void* worker_thread_function(void* args){
             pthread_mutex_lock(&mutex_pipe_WM);
             while(flag_semaforo == ROSSO) pthread_cond_wait(&cond_var_pipe_WM,&mutex_pipe_WM);
             flag_semaforo = ROSSO;
-            if(writen(pipeWorker_manager[1],&r->socket_fd,sizeof(int)) == -1){
+            if(writen(pipeWorker_Manager[1],&r->socket_fd,sizeof(int)) == -1){
                 perror("Errore writen pipeWM");
                 exit(EXIT_FAILURE);
             }
@@ -716,6 +716,7 @@ int task_openFile(request* r, response* feedback){
                         feedback->type = GENERIC_ERROR;
                         return 0;
                     }
+                    if(f->modified_flag) update_file(&storage,f);
                     return 1;
                 }
                 else{
