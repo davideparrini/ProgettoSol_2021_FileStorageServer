@@ -11,7 +11,7 @@ SERVER_DEPS =  $(SRC)/server.c $(LIBS)/libserver.so
 
 TARGETS =  client server  
 
-.PHONY : all, cleanall, test1, test2, test3
+.PHONY : all, cleanall, test1, test2
 .SUFFIXES: .c .h
 
 all: $(TARGETS)
@@ -71,6 +71,4 @@ test1: client server
 test2: client server
 	./scripts/test2.sh
 
-test3: client server
-	./scripts/test3.sh
 	
