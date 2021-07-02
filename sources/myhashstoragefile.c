@@ -76,7 +76,7 @@ void appendContent(file_t * f,void *buff,size_t size){
 
 }
 
-void init_list(list* l){
+void init_list(list_file* l){
 	l->head = NULL;
 	l->tail = NULL;
 	l->size = 0;
@@ -98,8 +98,8 @@ void init_hash(hashtable *table, config s){
 	table->stat_max_n_file = 0;
 	table->stat_n_replacing_algoritm = 0;
 
-	table->cell = malloc(table->len*sizeof(list));
-	memset(table->cell,0,table->len*sizeof(list));
+	table->cell = malloc(table->len*sizeof(list_file));
+	memset(table->cell,0,table->len*sizeof(list_file));
 	for (size_t i = 0;i < table->len; i++){
 		init_list(&table->cell[i]);
 	}
@@ -118,7 +118,7 @@ int hash(hashtable table,char *namefile){
 
 
 
-void ins_head_list(list *cell,file_t *file){
+void ins_head_list(list_file *cell,file_t *file){
 	//inserimento in testa della lista
 	file->next = NULL; //per sicurezza annullo i puntatori next/prec del file
 	file->prec = NULL;
@@ -131,7 +131,7 @@ void ins_head_list(list *cell,file_t *file){
     cell->size++;
 	cell->dim_bytes += file->dim_bytes;
 }
-void ins_tail_list(list *cell,file_t *file){
+void ins_tail_list(list_file *cell,file_t *file){
 	//inserimento in coda della lista
 	file->next = NULL; //per sicurezza annullo i puntatori next/prec del file
 	file->prec = NULL;
@@ -148,7 +148,7 @@ void ins_tail_list(list *cell,file_t *file){
 	cell->size++;
 	cell->dim_bytes += file->dim_bytes;
 }
-file_t* pop_head_list(list *cell){
+file_t* pop_head_list(list_file *cell){
 	if(cell->size == 0){
         return NULL; 
     }
@@ -168,7 +168,7 @@ file_t* pop_head_list(list *cell){
 	return res;
 
 }
-file_t* pop_tail_list(list *cell){
+file_t* pop_tail_list(list_file *cell){
 	//rimouve e ritorna l'ultimo elemento della lista
     if(cell->size == 0){
         return NULL; 
@@ -208,7 +208,7 @@ void ins_file_cache(hashtable *table,file_t* file){
 	if(table->stat_max_n_file < table->n_file) table->stat_max_n_file = table->n_file;
 }
 
-void extract_file(list* cell,file_t* file){
+void extract_file(list_file* cell,file_t* file){
 	//questa funzione va utilizzata assumendo di sapere per certo che il file è nella cella passata della hash
 	if(cell->size == 0) return;
 	if(cell->size == 1){
@@ -306,9 +306,9 @@ file_t* research_file(hashtable table,char *namefile){
 	return NULL;
 }
 
-file_t* research_file_list(list cell,char* namefile){
+file_t* research_file_list(list_file cell,char* namefile){
 	file_t* f = NULL;
-	list temp = cell;
+	list_file temp = cell;
 	while(temp.head != NULL){
 		if(!strncmp(temp.head->abs_path,namefile,strlen(namefile))){
 			f = temp.head;
@@ -321,7 +321,7 @@ file_t* research_file_list(list cell,char* namefile){
 
 
 
-int init_file_inServer(hashtable* table,file_t *f,list* list_reject){
+int init_file_inServer(hashtable* table,file_t *f,list_file* list_reject){
 	if(table->n_file < table->max_n_file){
         ins_file_hashtable(table,f);
 		return 1;
@@ -334,7 +334,7 @@ int init_file_inServer(hashtable* table,file_t *f,list* list_reject){
 	int find = 0,h = 0;
 	file_t* to_reject;
 	while(!find && h < table->len){
-		list temp = table->cell[h];
+		list_file temp = table->cell[h];
 		while(!find && temp.head != NULL){
 			if(temp.head->modified_flag == 1){
 				to_reject = temp.head;
@@ -360,7 +360,7 @@ int init_file_inServer(hashtable* table,file_t *f,list* list_reject){
 
 
 
-int ins_file_server(hashtable* table, file_t *f,list* list_reject){
+int ins_file_server(hashtable* table, file_t *f,list_file* list_reject){
 	struct stat s;
 	
 	if (stat(f->abs_path, &s) == -1) {
@@ -388,7 +388,7 @@ int ins_file_server(hashtable* table, file_t *f,list* list_reject){
 		int stop = 0,h = 0, max_files_toVisite = table->n_file - table->cache.size;
 		size_t somma_bytes; //somma bytes della list_reject
 		while(!stop && max_files_toVisite > 0){
-			list temp = table->cell[h];
+			list_file temp = table->cell[h];
 			while(temp.head != NULL){
 				max_files_toVisite--;
 				if(temp.head->modified_flag == 1 && (strncmp(temp.head->abs_path,f->abs_path,strlen(f->abs_path)) != 0)){
@@ -451,7 +451,7 @@ int ins_file_server(hashtable* table, file_t *f,list* list_reject){
 	return 1;
 }
 
-int modifying_file(hashtable* table,file_t* f,size_t size_inplus,list* list_reject){
+int modifying_file(hashtable* table,file_t* f,size_t size_inplus,list_file* list_reject){
 	
 	if(table->memory_capacity < table->memory_used + size_inplus){
 		if(table->n_file_modified == 0){
@@ -470,7 +470,7 @@ int modifying_file(hashtable* table,file_t* f,size_t size_inplus,list* list_reje
 				int h = 0;
 				size_t somma_bytes; //somma bytes della list_reject
 				while(!stop && max_files_toVisite > 0 && h < table->len){
-					list temp = table->cell[h];
+					list_file temp = table->cell[h];
 					while(temp.head != NULL){
 						max_files_toVisite--;
 						if(temp.head->modified_flag == 1 && (strncmp(temp.head->abs_path,f->abs_path,strlen(f->abs_path)) != 0)){
@@ -585,7 +585,7 @@ file_t* remove_file_server(hashtable* table, file_t* f){
 
 
 
-int isEmpty(list cella){
+int isEmpty(list_file cella){
 	if(cella.head != NULL) return 0;
 	else return 1; 
 }
@@ -593,8 +593,8 @@ int isCacheFull(hashtable table){
 	if(table.cache.size == table.max_size_cache) return 1;
 	else return 0;
 }
-int isContains_list(list cell, file_t* file){
-	list temp = cell;
+int isContains_list(list_file cell, file_t* file){
+	list_file temp = cell;
 	while (temp.head != NULL){
 		if (!strcmp(file->abs_path,temp.head->abs_path)) {
 			return 1;
@@ -611,7 +611,7 @@ int isContains_hash(hashtable table, file_t* file){
 }
 
 
-void concatList(list *l,list *l2){
+void concatList(list_file *l,list_file *l2){
 	while(l2->head != NULL){
 		file_t* aux = pop_head_list(l2);
 		ins_tail_list(l,aux);
@@ -633,7 +633,7 @@ void print_storageServer(hashtable table){
 	for (int i=0; i < table.len; i++){
 		printf("%d -> ",i);
 		if(table.cell[i].head != NULL){
-			list temp = table.cell[i];
+			list_file temp = table.cell[i];
 			
 			while(temp.head != NULL){
 				printf("%s -> ",temp.head->abs_path);
@@ -643,7 +643,7 @@ void print_storageServer(hashtable table){
 		printf("NULL\n");
 	}
 	printf("Cache -> ");
-	list temp = table.cache;
+	list_file temp = table.cache;
 	while(temp.head != NULL){
 		printf("%s -> ",temp.head->abs_path);
 		temp.head = temp.head->next;
@@ -662,7 +662,7 @@ void free_file(file_t* file){
 	free(file->abs_path);
 	free(file);
 }
-void free_list(list* l){
+void free_list(list_file* l){
 	while(l->head != NULL){
 		file_t *reject = l->head;
 		l->head = l->head->next;

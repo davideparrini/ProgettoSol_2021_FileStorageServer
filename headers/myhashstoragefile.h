@@ -25,7 +25,7 @@ typedef struct _list{
 	size_t dim_bytes;
 	file_t *head;
 	file_t *tail;
-}list;
+}list_file;
 
 typedef struct _hash{
 	int len;
@@ -42,8 +42,8 @@ typedef struct _hash{
 	size_t stat_dim_file;
 	int stat_n_replacing_algoritm;
 	
-	list *cell;
-	list cache;
+	list_file *cell;
+	list_file cache;
 }hashtable;
 
 
@@ -52,50 +52,50 @@ typedef struct _hash{
 file_t* init_file(char *namefile);
 int writeContentFile(file_t* f);
 void appendContent(file_t * f,void *buff,size_t size);
-void init_list(list* l);
+void init_list(list_file* l);
 void init_hash(hashtable *table, config s);
 
 //funzione hash
 int hash(hashtable table,char *namefile);
 
 //operzioni su liste
-void ins_tail_list(list *cell,file_t *file);
-void ins_head_list(list *cell, file_t*file);
-file_t* pop_head_list(list *cell);
-file_t* pop_tail_list(list *cell);
+void ins_tail_list(list_file *cell,file_t *file);
+void ins_head_list(list_file *cell, file_t*file);
+file_t* pop_head_list(list_file *cell);
+file_t* pop_tail_list(list_file *cell);
 
 
 //insermento file nel server
 void ins_file_cache(hashtable *table,file_t* file); 
 void ins_file_hashtable(hashtable *table, file_t* file);
 //ins e rimozione file server seguendo politica lru
-int init_file_inServer(hashtable* table,file_t *f,list* list_reject);
-int ins_file_server(hashtable* storage, file_t *f,list* list_reject);
+int init_file_inServer(hashtable* table,file_t *f,list_file* list_reject);
+int ins_file_server(hashtable* storage, file_t *f,list_file* list_reject);
 file_t* remove_file_server(hashtable* table, file_t* f);
 //estrazione di file
 void extract_file_to_server(hashtable *table,file_t* file);
-void extract_file(list* cell,file_t* file);
+void extract_file(list_file* cell,file_t* file);
 //estrae il file dalla sua posizione attuale e lo mette in cima alla cache
 void update_file(hashtable *table,file_t* file);
 //modifica il file,mettendolo nella cache
-int modifying_file(hashtable* table,file_t* f,size_t size_inplus,list* list_reject);
+int modifying_file(hashtable* table,file_t* f,size_t size_inplus,list_file* list_reject);
 //ricerca file
-file_t* research_file_list(list cell,char* namefile);
+file_t* research_file_list(list_file cell,char* namefile);
 file_t* research_file(hashtable table,char* namefile);
 //utilità
 int isContains_hash(hashtable table, file_t* file);
-int isEmpty(list cella);
+int isEmpty(list_file cella);
 int isCacheFull(hashtable table);
 
 //frees
 
 void free_file(file_t* file);
-void free_list(list* l);
+void free_list(list_file* l);
 void free_hash(hashtable* table);
 
 void print_list(file_t* head);
 void print_storageServer(hashtable table);
-void concatList(list *l,list *l2);
+void concatList(list_file *l,list_file *l2);
 
 
 

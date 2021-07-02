@@ -3,14 +3,14 @@
 #include <stdlib.h>
 #include <string.h>
 //queue for request
-static node_t *head = NULL;
-static node_t *tail = NULL;
+static connection_t *head = NULL;
+static connection_t *tail = NULL;
 
 
 void init_q(int client_socket){
 
-    node_t* q  = (node_t*) malloc(sizeof(node_t));
-    memset(q,0,sizeof(node_t));
+    connection_t* q  = (connection_t*) malloc(sizeof(connection_t));
+    memset(q,0,sizeof(connection_t));
 	q->client_socket = client_socket;
     head = q;
     tail = q;
@@ -22,18 +22,18 @@ void push_q(int client_socket){
         init_q(client_socket); 
         return;
     }  
-    tail->next = (node_t*) malloc(sizeof(node_t));
-    memset(tail->next,0,sizeof(node_t));
+    tail->next = (connection_t*) malloc(sizeof(connection_t));
+    memset(tail->next,0,sizeof(connection_t));
     tail->next->client_socket = client_socket;
     tail->next->next = NULL;
     tail = tail->next;
 }
 void removeConnection_q(int client_socket){
-    node_t *cor = head;
-    node_t *prec = NULL;
+    connection_t *cor = head;
+    connection_t *prec = NULL;
     while(cor != NULL){
         if(cor->client_socket == client_socket){
-            node_t *toFree = cor;
+            connection_t *toFree = cor;
             
             if(prec == NULL){
                 cor = cor->next;
@@ -58,7 +58,7 @@ int pop_q(){
     }
     else{
         int res = head->client_socket;
-        node_t *temp = head;
+        connection_t *temp = head;
         head = head->next;
         if(head == NULL) tail = NULL;
         free(temp);
@@ -66,7 +66,7 @@ int pop_q(){
     }
 }
 void print_q(){
-    node_t *temp = head;
+    connection_t *temp = head;
     while(temp != NULL){
         printf("Connessione n %d\n",temp->client_socket);
         temp = temp->next;
@@ -74,7 +74,7 @@ void print_q(){
     printf("Fine printq\n");
 }
 void rmv_q() {
-    node_t* q = head;
+    connection_t* q = head;
 	if (q == NULL)
 		return;
 	rmv_q(q->next);

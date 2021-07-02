@@ -42,7 +42,7 @@ config configurazione;
 static hashtable storage;
 
 //lista di file rimossi dal server
-static list files_removed;
+static list_file files_removed;
 
 //variabile statistiche delle varie operazioni
 static stats stats_op;
@@ -121,7 +121,7 @@ void setLogFile();
 void create_FileLog();
 
 //manda la lista dei file da buttare al client
-int sendlistFiletoReject(list removed_files,int fd_toSend);
+int sendlistFiletoReject(list_file removed_files,int fd_toSend);
 
 //inizializza a 0 tutte le statisiche della struttura dati stats
 void init_Stats(stats* statistiche_operazioni);
@@ -808,7 +808,7 @@ int task_read_N_file(request* r, response* feedback){
     int contatore_file_letti = 0; 
 
     while(n_to_read > contatore_file_letti){
-        list temp;
+        list_file temp;
         if(h < storage.len) temp = storage.cell[h];
         else temp = storage.cache;
 
@@ -880,7 +880,7 @@ int task_write_file(request* r, response* feedback){
         }
         else{
             
-            list removed_files;
+            list_file removed_files;
             init_list(&removed_files);
             if(ins_file_server(&storage,f,&removed_files)){
                 flag_ok = 1;
@@ -941,7 +941,7 @@ int task_append_file(request* r, response* feedback){
         if(!flagsOk) return 0;
 
         pthread_mutex_lock(&mutex_file);
-        list removed_files;
+        list_file removed_files;
         init_list(&removed_files);
         if(modifying_file(&storage,file,r->request_size,&removed_files)){
             
@@ -1113,7 +1113,7 @@ void create_FileLog(){
 	
     for (int i=0; i < storage.len; i++){
 		if(storage.cell[i].head != NULL){
-			list temp = storage.cell[i];
+			list_file temp = storage.cell[i];
 			while(temp.head != NULL){
 				fprintf(f,"- %s\n",temp.head->abs_path);
                 printf("- %s\n",temp.head->abs_path);
@@ -1123,7 +1123,7 @@ void create_FileLog(){
 	}
     fprintf(f,"\nin cache\n\n");
     printf("\nin cache:\n\n");
-    list temp = storage.cache;
+    list_file temp = storage.cache;
     while (temp.head != NULL){
         fprintf(f,"- %s\n",temp.head->abs_path);
         printf("- %s\n",temp.head->abs_path);
@@ -1208,7 +1208,7 @@ void init_Stats(stats* statistiche_operazioni){
 }
 
 
-int sendlistFiletoReject(list removed_files,int fd_toSend){
+int sendlistFiletoReject(list_file removed_files,int fd_toSend){
 
     int nToSend = removed_files.size;
     if(writen(fd_toSend,&nToSend,sizeof(int)) == -1){

@@ -34,7 +34,6 @@ typedef enum{
 
 typedef struct s{
     response_type type;
-    int flags;
     int c; //contatore generico
     size_t size;
 }response;

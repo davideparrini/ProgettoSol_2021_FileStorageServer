@@ -4,7 +4,7 @@
 typedef struct node__{
     struct node__* next;
     int client_socket;
-}node_t;
+}connection_t;
 
 void init_q(int client_socket);
 void push_q(int client_socket);

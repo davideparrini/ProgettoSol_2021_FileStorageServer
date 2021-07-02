@@ -5,11 +5,11 @@
 #define MAX_SOCKET_PATH 256
 
 //path della cartella corrente
-char cwdPath[NAME_MAX];
+static char cwdPath[NAME_MAX];
 //path della cartella di test da utilizzare
-char testDirPath[NAME_MAX];
+static char testDirPath[NAME_MAX];
 //path della cartella di test dove vengono salvati i file
-char testToSaveDirPath[NAME_MAX];
+static char testToSaveDirPath[NAME_MAX];
 
 char* socket_path;
 
