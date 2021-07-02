@@ -816,8 +816,10 @@ int task_read_file(request* r, response* feedback){
 int task_read_N_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
     int n_to_read; //Numero effettivo di file da leggere
+    pthread_mutex_lock(&mutex_file);
     if(r->c <= 0 || r->c >= storage.n_files_free) n_to_read = storage.n_files_free;
     else n_to_read = r->c;
+    pthread_mutex_unlock(&mutex_file);
 
     if(writen(r->socket_fd,&n_to_read,sizeof(int)) == -1){
         errno = EAGAIN;
@@ -825,7 +827,7 @@ int task_read_N_file(request* r, response* feedback){
 
     size_t h = 0;
     int contatore_file_letti = 0; 
-
+    pthread_mutex_lock(&mutex_file);
     while(n_to_read > contatore_file_letti){
         list_file temp;
         if(h < storage.len) temp = storage.cell[h];
@@ -859,15 +861,13 @@ int task_read_N_file(request* r, response* feedback){
                 }
         
                 contatore_file_letti++;
-                pthread_mutex_lock(&mutex_file);
                 if(temp.head->modified_flag) update_file(&storage,temp.head);
-                pthread_mutex_unlock(&mutex_file);
             } 	
             temp.head = temp.head->next;
 		}
         h++;   
     }
-    
+    pthread_mutex_unlock(&mutex_file);
     if(contatore_file_letti != n_to_read){
         feedback->type = READ_N_FILE_FAILURE;  
         return 0;  
