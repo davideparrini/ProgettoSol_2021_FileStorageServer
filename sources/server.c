@@ -614,27 +614,34 @@ int task_openFile(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
     
     //cerco se il file è presente nello storageFile
+    pthread_mutex_lock(&mutex_file);
     file_t* f = research_file(storage,r->pathfile);
+    pthread_mutex_unlock(&mutex_file);
 
     switch (r->flags){
  
     case O_CREATE : 
         if(f == NULL){
+            pthread_mutex_lock(&mutex_file);
             f = init_file(r->pathfile);
             f->open_flag = 1;
             f->o_create_flag = 1;
             if(!init_file_inServer(&storage,f,&files_removed)){
                 free_file(f);
                 feedback->type = NO_SPACE_IN_SERVER;
+                pthread_mutex_unlock(&mutex_file);
                 return 0;
             }
             else{
+                
                 feedback->type =  O_CREATE_SUCCESS;
                 if((f->fd = open(f->abs_path, O_RDWR|O_CREAT,0777)) == -1){
                     perror("Errore open in task_open");
                     feedback->type = GENERIC_ERROR;
+                    pthread_mutex_unlock(&mutex_file);
                     return 0;
                 }
+                pthread_mutex_unlock(&mutex_file);
                 return 1;
             }
         }
@@ -656,13 +663,16 @@ int task_openFile(request* r, response* feedback){
             }
             else{
                 if(f->open_flag != 1){
+                    pthread_mutex_lock(&mutex_file);
                     f->open_flag = 1;
                     feedback->type = O_LOCK_SUCCESS;
                     if((f->fd = open(f->abs_path, O_RDWR)) == -1){
                         perror("Errore open in task_open");
                         feedback->type = GENERIC_ERROR;
+                        pthread_mutex_unlock(&mutex_file);
                         return 0;
                     }
+                    pthread_mutex_unlock(&mutex_file);
                     return 1; 
                 }
                 else{
@@ -676,12 +686,14 @@ int task_openFile(request* r, response* feedback){
 
     case O_CREATE|O_LOCK :
         if(f == NULL){
+            pthread_mutex_lock(&mutex_file);
             f = init_file(r->pathfile);
             f->open_flag = 1;
             f->o_create_flag = 1;
             f->locked_flag = 1;
             if(!init_file_inServer(&storage,f,&files_removed)){
                 feedback->type = NO_SPACE_IN_SERVER;
+                pthread_mutex_unlock(&mutex_file);
                 return 0;
             }
             else{
@@ -689,8 +701,10 @@ int task_openFile(request* r, response* feedback){
                 if((f->fd = open(f->abs_path, O_RDWR|O_CREAT,0777)) == -1){
                     perror("Errore open in task_open");
                     feedback->type = GENERIC_ERROR;
+                    pthread_mutex_unlock(&mutex_file);
                     return 0;
                 }
+                pthread_mutex_unlock(&mutex_file);
                 return 1;
             }
         }
@@ -710,13 +724,16 @@ int task_openFile(request* r, response* feedback){
             if(f->locked_flag == 1) feedback->type = CANNOT_ACCESS_FILE_LOCKED;
             else{
                 if(f->open_flag != 1){
+                    pthread_mutex_lock(&mutex_file);
                     f->open_flag = 1;  
                     if((f->fd = open(f->abs_path, O_RDWR)) == -1){
                         perror("Errore open in task_open");
                         feedback->type = GENERIC_ERROR;
+                        pthread_mutex_unlock(&mutex_file);
                         return 0;
                     }
                     if(f->modified_flag) update_file(&storage,f);
+                    pthread_mutex_unlock(&mutex_file);
                     return 1;
                 }
                 else{
@@ -738,8 +755,9 @@ int task_openFile(request* r, response* feedback){
 int task_read_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
     int flag_ok = 1; //questo flag serve per far combaciare le readn/writen server/client analizzando se i flag di apertura/lock, il contenuto del file siano ottimali per la lettura del file
-
+    pthread_mutex_lock(&mutex_file);
     file_t* f = research_file(storage,r->pathfile);
+    pthread_mutex_unlock(&mutex_file);
 
     if(f == NULL){
         flag_ok = 0;
@@ -786,8 +804,9 @@ int task_read_file(request* r, response* feedback){
             perror("SEND CONTENT ERROR IN WRITEN");
             return 0;
         }
-
+        pthread_mutex_lock(&mutex_file);
         if(f->modified_flag) update_file(&storage,f);
+        pthread_mutex_unlock(&mutex_file);
         feedback->type = READ_FILE_SUCCESS;
         feedback->size = f->dim_bytes;
         return 1;
@@ -840,7 +859,9 @@ int task_read_N_file(request* r, response* feedback){
                 }
         
                 contatore_file_letti++;
+                pthread_mutex_lock(&mutex_file);
                 if(temp.head->modified_flag) update_file(&storage,temp.head);
+                pthread_mutex_unlock(&mutex_file);
             } 	
             temp.head = temp.head->next;
 		}
@@ -859,7 +880,10 @@ int task_read_N_file(request* r, response* feedback){
 
 int task_write_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 
+    pthread_mutex_lock(&mutex_file);
     file_t* f = research_file(storage,r->pathfile);
+    pthread_mutex_unlock(&mutex_file);
+
     int flag_ok = 0; //flag che serve per far combaciare le writen/readn server/client, se i flag non sono quelli richiesti per effetturare una writefile, flag_ok rimane a 0
     if(f == NULL){
         if(writen(r->socket_fd,&flag_ok,sizeof(int)) == -1){
@@ -882,7 +906,9 @@ int task_write_file(request* r, response* feedback){
             
             list_file removed_files;
             init_list(&removed_files);
+            pthread_mutex_lock(&mutex_file);
             if(ins_file_server(&storage,f,&removed_files)){
+                pthread_mutex_unlock(&mutex_file);
                 flag_ok = 1;
                 if(writen(r->socket_fd,&flag_ok,sizeof(int)) == -1){
                     errno = EAGAIN;
@@ -899,6 +925,7 @@ int task_write_file(request* r, response* feedback){
                 return 1;  
             }
             else{
+                pthread_mutex_unlock(&mutex_file);
                 if(writen(r->socket_fd,&flag_ok,sizeof(int)) == -1){
                     errno = EAGAIN;
                     return -1;
@@ -912,7 +939,10 @@ int task_write_file(request* r, response* feedback){
 int task_append_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
     int flagsOk = 1;
+    pthread_mutex_lock(&mutex_file);
     file_t* file = research_file(storage,r->pathfile);
+    pthread_mutex_unlock(&mutex_file);
+
     if(file == NULL){
         flagsOk = 0;
         if(writen(r->socket_fd,&flagsOk,sizeof(int)) == -1){
@@ -940,16 +970,18 @@ int task_append_file(request* r, response* feedback){
 
         if(!flagsOk) return 0;
 
-        pthread_mutex_lock(&mutex_file);
         list_file removed_files;
         init_list(&removed_files);
+
+        pthread_mutex_lock(&mutex_file);
         if(modifying_file(&storage,file,r->request_size,&removed_files)){
-            
+
             if(fcntl(file->fd,F_SETFL,O_RDWR|O_APPEND) == -1){
                 perror("Errore set flag in task_appendFile");
                 pthread_mutex_unlock(&mutex_file); 
                 return 0;
             }
+            pthread_mutex_unlock(&mutex_file);
 
             char content[r->request_size];
             memset(content,0,r->request_size);
@@ -957,20 +989,25 @@ int task_append_file(request* r, response* feedback){
             if(readn(r->socket_fd,&content,r->request_size) == -1){
                 perror("GET CONTENT ERROR IN WRITEN 2");
                 feedback->type = GENERIC_ERROR;
+                pthread_mutex_lock(&mutex_file);
                 fcntl(file->fd,F_SETFL,O_RDWR);
                 pthread_mutex_unlock(&mutex_file);
                 return 0;
             }
+
+            pthread_mutex_lock(&mutex_file);
             appendContent(file,content,r->request_size);
-            
+            pthread_mutex_unlock(&mutex_file);
+
             if(write(file->fd,content,r->request_size) < 0){
                 perror("Errore scrittura file in task_appendToFile");
                 feedback->type = GENERIC_ERROR;
+                pthread_mutex_lock(&mutex_file);
                 fcntl(file->fd,F_SETFL,O_RDWR);
                 pthread_mutex_unlock(&mutex_file); 
                 return 0;
             }
-
+            pthread_mutex_lock(&mutex_file);
             if(fcntl(file->fd,F_SETFL,O_RDWR) == -1){
                 perror("Errore set flag in task_appendFile");
                 pthread_mutex_unlock(&mutex_file); 
@@ -1009,8 +1046,10 @@ int task_lock_file(request* r, response* feedback){
 
 int task_close_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
-
+    pthread_mutex_lock(&mutex_file);
     file_t* file = research_file(storage,r->pathfile);
+    pthread_mutex_unlock(&mutex_file);
+
     if(file == NULL){
         feedback->type = FILE_NOT_EXIST;
     }
@@ -1019,10 +1058,11 @@ int task_close_file(request* r, response* feedback){
             feedback->type = FILE_NOT_OPEN;
             return 0;
         }
-
+        pthread_mutex_lock(&mutex_file);
         if(close(file->fd) == -1){
             perror("Errore close file, in task_close_file");
             feedback->type = GENERIC_ERROR;
+            pthread_mutex_unlock(&mutex_file);
             return 0;
         }
 
@@ -1030,6 +1070,7 @@ int task_close_file(request* r, response* feedback){
         storage.n_files_free--;
         file->fd = -2;
         if(file->modified_flag) update_file(&storage,file);
+        pthread_mutex_unlock(&mutex_file);
         feedback->type = CLOSE_FILE_SUCCESS;
         return 1;
     }
@@ -1040,7 +1081,9 @@ int task_close_file(request* r, response* feedback){
 int task_remove_file(request* r, response* feedback){
     //In caso di successo ritorna 1 else 0
     int res = 0;
+    pthread_mutex_lock(&mutex_file);
     file_t* file = research_file(storage,r->pathfile);
+    pthread_mutex_unlock(&mutex_file);
     if(file == NULL){
         feedback->type = FILE_NOT_EXIST;
     }
