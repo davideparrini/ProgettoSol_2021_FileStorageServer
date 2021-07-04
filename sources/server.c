@@ -907,7 +907,7 @@ int task_write_file(request* r, response* feedback){
             list_file removed_files;
             init_list(&removed_files);
             pthread_mutex_lock(&mutex_file);
-            if(ins_file_server(&storage,f,&removed_files)){
+            if(ins_content_file_server(&storage,f,&removed_files)){
                 pthread_mutex_unlock(&mutex_file);
                 flag_ok = 1;
                 if(writen(r->socket_fd,&flag_ok,sizeof(int)) == -1){
