@@ -385,10 +385,11 @@ void* manager_thread_function(void* args){
                         if(sig == SIGINT || sig == SIGQUIT){
                             //segnale ricevuto SIGINT O SIGQUIT, chiudo il server
                             pthread_mutex_lock(&mutex_request);
+                            flag_closeServer = 1;
                             pthread_cond_broadcast(&cond_var_request);
                             pthread_mutex_unlock(&mutex_request);
                             termina = 1;
-                            flag_closeServer = 1;
+                            
                         }
                         if(sig == SIGHUP){
                             //segnale ricevuto SIGHUP, rimando la chiusura del server fino a che non ci sono più connessioni
@@ -508,7 +509,7 @@ void* worker_thread_function(void* args){
     while (1){
         pthread_mutex_lock(&mutex_request);
 
-        if(!flag_closeServer && isEmpty_r()){ //se la lista di richieste è vuota e non ho ricevuto segnale di chiusura del server, metto in attesa il thread 
+        while(!flag_closeServer && isEmpty_r()){ //se la lista di richieste è vuota e non ho ricevuto segnale di chiusura del server, metto in attesa il thread 
             pthread_cond_wait(&cond_var_request,&mutex_request);
         }
         if(flag_closeServer){ //thread svegliato, verifico prima di eseguire la richiesta se il server non è in stato di chiusura
